@@ -1,0 +1,1 @@
+# GitCompass Pydantic Schemas
