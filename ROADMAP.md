@@ -11,11 +11,13 @@ graph TD
     P1[Phase 1: Foundation & Supabase Setup] --> P2[Phase 2: Core Mining Engine]
     P2 --> P3[Phase 3: Analytics & Frontend Scaffolding]
     P3 --> P4[Phase 4: Visualizing Evolution]
-    P4 --> P5[Phase 5: AI Intelligence Layer]
+    P4 --> P4_5[Phase 4.5: Non-AI Analytics]
+    P4_5 --> P5[Phase 5: AI Intelligence Layer]
     style P1 fill:#ECFDF5,stroke:#059669,stroke-width:2px
     style P2 fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px
     style P3 fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px
     style P4 fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px
+    style P4_5 fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px
     style P5 fill:#EFF6FF,stroke:#3B82F6,stroke-width:2px
 ```
 
@@ -74,6 +76,33 @@ graph TD
    - Nodes can be collapsed/expanded to analyze specific subdirectories without cluttering the screen.
 3. **Interactive Search & Filtering:**
    - Filter views by file extension, contributor, or specific timeline brackets.
+
+---
+
+## 📈 Phase 4.5: Deep Architectural Analytics (Non-AI)
+**Goal:** Extract deep, deterministic architectural signals from Git history for technical audits prior to AI integration.
+
+### Salient Features & Architecture
+1. **Conventional Commit Categorization:**
+   - Differentiate "Feature/Fix" churn from "Docs/Style".
+   - **Backend:** Parse commit messages via regex during extraction and store `commit_type` in Supabase.
+   - **Frontend:** Interactive filters on the D3 Treemap to highlight specific churn (e.g., bug-prone zones).
+2. **Temporal Coupling (Co-Change Matrix):**
+   - Identify hidden dependencies (files frequently changing together).
+   - **Backend:** Algorithm calculates coupling degrees ($>50\%$ threshold), filtering out noise (commits with $>50$ files).
+   - **Frontend:** Hovering a file in the Treemap highlights temporally coupled sibling files.
+3. **Bus Factor & Knowledge Loss Index:**
+   - Measure knowledge concentration to flag personnel risks.
+   - **Backend:** Calculate knowledge distribution per file and an overall repository Bus Factor.
+   - **Frontend:** Display Orphan Risk Score badges in the UI for files where primary contributors haven't committed in 90 days.
+4. **Time Machine (Historical Filtering):**
+   - Analyze churn within custom timeframes instead of just lifetime.
+   - **Backend:** API endpoints accept dynamic `start_date` and `end_date` query filters.
+   - **Frontend:** Global date-range slider implemented on the analytics dashboard.
+5. **Export Capabilities & Incremental Sync:**
+   - Tangible deliverables and optimized repository updates.
+   - **Frontend:** Export options for CSV (Hotspots/Coupling) and SVG/PNG (Treemap).
+   - **Backend:** Delta extraction (`git log <sha>..HEAD`) using `latest_commit_sha` to bypass full re-parsing.
 
 ---
 

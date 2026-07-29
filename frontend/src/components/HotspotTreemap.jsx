@@ -45,10 +45,9 @@ export default function HotspotTreemap({ hotspots }) {
   const root = useMemo(() => {
     const treemap = d3.treemap()
       .size([width, height])
-      .paddingTop(24) // Space for directory labels
-      .paddingRight(2)
-      .paddingInner(2)
-      .paddingOuter(4)
+      .paddingTop(node => (node.children ? 28 : 0)) // Reserve 28px at the top of parent directories
+      .paddingInner(4)                             // 4px spacing between sibling boxes
+      .paddingOuter(6)                             // 6px padding inside container borders
       .round(true);
     return treemap(hierarchy);
   }, [hierarchy, width, height]);
@@ -79,21 +78,39 @@ export default function HotspotTreemap({ hotspots }) {
           viewBox={`0 0 ${width} ${height}`} 
           className="w-full h-auto drop-shadow-sm font-sans"
         >
-          {/* Render Directory Labels */}
-          {root.descendants().filter(d => d.depth > 0 && d.children && d.y1 - d.y0 > 24).map((node, i) => (
-            <g key={`dir-${i}`} transform={`translate(${node.x0},${node.y0})`}>
-              <text 
-                x={4} 
-                y={16} 
-                fill="#64748b" 
-                fontSize={12} 
-                fontWeight="600" 
-                className="pointer-events-none select-none"
-              >
-                {node.data.name}
-              </text>
-            </g>
-          ))}
+          {/* Render Parent Directory Containers */}
+          {root.descendants().filter(d => d.depth > 0 && d.children).map((node, i) => {
+            const nodeWidth = node.x1 - node.x0;
+            const nodeHeight = node.y1 - node.y0;
+            const showText = nodeWidth > 40;
+
+            return (
+              <g key={`dir-rect-${i}`} transform={`translate(${node.x0},${node.y0})`}>
+                <rect
+                  width={nodeWidth}
+                  height={nodeHeight}
+                  fill="#f8fafc" // Subtle slate background
+                  stroke="#cbd5e1" // Soft border
+                  strokeWidth={1}
+                  rx={4}
+                  className="pointer-events-none"
+                />
+                
+                {showText && (
+                  <text
+                    x={8}
+                    y={18}
+                    fill="#64748b"
+                    fontSize={12}
+                    fontWeight="600"
+                    className="pointer-events-none select-none"
+                  >
+                    {node.data.name}
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
           {/* Render File Leaves */}
           {root.leaves().map((leaf, i) => {
@@ -101,7 +118,7 @@ export default function HotspotTreemap({ hotspots }) {
             const blockHeight = leaf.y1 - leaf.y0;
             
             // Only render text if the block is large enough
-            const showText = blockWidth > 40 && blockHeight > 18;
+            const showText = blockWidth > 45 && blockHeight > 22;
 
             return (
               <g key={`leaf-${i}`} transform={`translate(${leaf.x0},${leaf.y0})`}>
@@ -111,22 +128,29 @@ export default function HotspotTreemap({ hotspots }) {
                   fill={colorScale(leaf.data.commits)}
                   stroke="#ffffff"
                   strokeWidth={1}
-                  rx={2} // Slight rounding for a minimalist, modern feel
+                  rx={2}
                   className="hover:opacity-80 transition-opacity cursor-pointer stroke-white/50"
                 >
                   <title>{`${leaf.data.path}\nCommits: ${leaf.data.commits}\nVolume (Lines Changed): ${leaf.data.value}`}</title>
                 </rect>
                 
                 {showText && (
-                  <text 
-                    x={4} 
-                    y={14} 
-                    fill={leaf.data.commits > maxCommits * 0.6 ? "#fff" : "#1e293b"} // Contrast text for dark blocks
-                    fontSize={10} 
-                    className="pointer-events-none select-none overflow-hidden"
+                  <foreignObject
+                    x={0}
+                    y={0}
+                    width={blockWidth}
+                    height={blockHeight}
+                    className="pointer-events-none"
                   >
-                    {leaf.data.name.length > blockWidth / 6 ? leaf.data.name.substring(0, Math.floor(blockWidth / 6)) + '…' : leaf.data.name}
-                  </text>
+                    <div 
+                      className="w-full h-full p-1.5 overflow-hidden break-words text-[10px] leading-[1.2] select-none"
+                      style={{ 
+                        color: leaf.data.commits > maxCommits * 0.6 ? "#ffffff" : "#1e293b" 
+                      }}
+                    >
+                      {leaf.data.name}
+                    </div>
+                  </foreignObject>
                 )}
               </g>
             );
