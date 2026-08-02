@@ -36,7 +36,16 @@ def batch_insert(table_name: str, records: List[dict]):
     for i in range(0, total, BATCH_SIZE):
         chunk = records[i : i + BATCH_SIZE]
         logger.debug("Inserting batch %d..%d into %s", i, i + len(chunk), table_name)
-        db.table(table_name).insert(chunk).execute()
+        try:
+            db.table(table_name).insert(chunk).execute()
+        except Exception as exc:
+            err_str = str(exc)
+            if table_name == "commits" and ("commit_type" in err_str or "PGRST204" in err_str):
+                logger.warning("commit_type column missing in database schema, stripping and retrying batch insert...")
+                cleaned_chunk = [{k: v for k, v in record.items() if k != "commit_type"} for record in chunk]
+                db.table(table_name).insert(cleaned_chunk).execute()
+            else:
+                raise exc
 
 
 def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Optional[str] = None):
@@ -91,7 +100,15 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
         if latest_commit_sha:
             update_payload["latest_commit_sha"] = latest_commit_sha
 
-        db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+        try:
+            db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+        except Exception as update_exc:
+            if "latest_commit_sha" in update_payload and ("latest_commit_sha" in str(update_exc) or "PGRST204" in str(update_exc)):
+                logger.warning("latest_commit_sha column not found in database schema, updating repository status without it.")
+                update_payload.pop("latest_commit_sha", None)
+                db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+            else:
+                raise update_exc
 
         logger.info("Finished background mining task for repo %s (ready)", repo_id)
 
@@ -120,9 +137,15 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
     logger.info("Starting background incremental sync task for repo %s (url: %s)", repo_id, github_url)
     db = get_service_client()
 
-    repo_res = db.table("repositories").select("latest_commit_sha, total_commits, total_files").eq("id", repo_id).execute()
-    existing_repo = repo_res.data[0] if repo_res.data else {}
-    since_sha = existing_repo.get("latest_commit_sha")
+    try:
+        repo_res = db.table("repositories").select("latest_commit_sha, total_commits, total_files").eq("id", repo_id).execute()
+        existing_repo = repo_res.data[0] if repo_res.data else {}
+        since_sha = existing_repo.get("latest_commit_sha")
+    except Exception as sel_exc:
+        logger.warning("Could not select latest_commit_sha column from repositories: %s", sel_exc)
+        repo_res = db.table("repositories").select("total_commits, total_files").eq("id", repo_id).execute()
+        existing_repo = repo_res.data[0] if repo_res.data else {}
+        since_sha = None
 
     temp_dir = tempfile.mkdtemp(prefix="gitcompass_sync_")
 
@@ -159,7 +182,16 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
         if latest_commit_sha:
             update_payload["latest_commit_sha"] = latest_commit_sha
 
-        db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+        try:
+            db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+        except Exception as update_exc:
+            if "latest_commit_sha" in update_payload and ("latest_commit_sha" in str(update_exc) or "PGRST204" in str(update_exc)):
+                logger.warning("latest_commit_sha column not found in database schema, updating repository status without it.")
+                update_payload.pop("latest_commit_sha", None)
+                db.table("repositories").update(update_payload).eq("id", repo_id).execute()
+            else:
+                raise update_exc
+
         logger.info("Finished incremental sync task for repo %s (added %d new commits)", repo_id, len(commits))
 
     except Exception as exc:
@@ -179,4 +211,5 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
 
     finally:
         safe_cleanup_dir(temp_dir)
+
 

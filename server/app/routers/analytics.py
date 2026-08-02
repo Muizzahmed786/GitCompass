@@ -99,7 +99,23 @@ async def get_repository_hotspots(
             if commit_type and commit_type != "all":
                 query = query.eq("commits.commit_type", commit_type)
 
-            res = query.range(offset, offset + page_size - 1).execute()
+            try:
+                res = query.range(offset, offset + page_size - 1).execute()
+            except Exception as exc:
+                if "commit_type" in str(exc) or "is_deleted" in str(exc) or "PGRST204" in str(exc):
+                    # Fallback query without commit_type or is_deleted if database migration 003/004 has not been applied
+                    fallback_query = (
+                        db.table("file_diffs")
+                        .select("file_path, insertions, deletions, commits!inner(author_name, committed_at, message)")
+                        .eq("repo_id", repo_id)
+                    )
+                    if start_date:
+                        fallback_query = fallback_query.gte("commits.committed_at", start_date)
+                    if end_date:
+                        fallback_query = fallback_query.lte("commits.committed_at", end_date)
+                    res = fallback_query.range(offset, offset + page_size - 1).execute()
+                else:
+                    raise exc
 
             if not res.data:
                 break
