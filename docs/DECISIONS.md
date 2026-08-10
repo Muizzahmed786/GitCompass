@@ -96,6 +96,24 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 
 ---
 
+### [2026-08-11] - Phase 6 Multi-Provider AI Fallback & Task-Aware Routing
+- **Context / Problem:** Gemini API calls can fail due to rate limits (HTTP 429) or quota exhaustion. Additionally, using full Gemini 3.5 Flash for simple tasks wastes quota. We need task-aware routing to conserve quota, and a fallback chain to maximize uptime.
+- **Options Considered:**
+  1. **Single Model / Single Provider:** Use Gemini 3.5 Flash for everything and fail hard on quota limits.
+  2. **Task-Aware Gemini + Multi-Provider Fallback:** Route simple tasks to `gemini-3.5-flash-lite` and complex tasks to `gemini-3.5-flash`. If the selected Gemini model fails due to a qualifying provider error, fall back to Groq (`llama-3.3-70b-versatile`), and then to a local Ollama model (`gemma3:12b`/`gemma3:4b`).
+- **Decision:** Implement Option 2 (Task-Aware Gemini Routing + 3-Tier Fallback Chain).
+- **Rationale:**
+  - **Task-Aware Routing:** `generate_evolution_summary` and `answer_qa` use Flash Lite (high volume, straightforward interpretation). `generate_development_story` and `detect_architecture_shifts` use full Flash (complex reasoning, chronological narrative).
+  - **Gemini (Primary):** Highest priority. The selected model is always attempted first for every independent request.
+  - **Groq (Secondary):** Extremely fast cloud inference. Activated only if the primary Gemini model encounters a qualifying failure (429, quota, 503).
+  - **Ollama (Tertiary):** Local GPU inference. Config-driven (`OLLAMA_ENABLED=false` by default). Activated only if both Gemini and Groq fail/are unconfigured.
+  - **Provider Abstraction:** The frontend remains provider-agnostic. `ai_service.py` coordinates model selection and fallback execution.
+- **Trade-offs Accepted:**
+  - Requires maintaining mapping of tasks to Gemini models in backend configuration.
+  - Fallback errors must be strictly distinguished from feature-level parsing errors (e.g., malformed JSON raises `ValueError` immediately without fallback).
+
+---
+
 ### [2026-08-10] - API Communication Protocol (Vite Dev Server Proxy vs. CORS headers)
 
 - **Context / Problem:** Handling API calls between frontend (`http://localhost:5173`) and backend (`http://localhost:8000`) during local development.

@@ -30,10 +30,16 @@ class Settings(BaseSettings):
     APP_NAME: str = "GitCompass"
     DEBUG: bool = False
 
-    # ── Gemini AI ─────────────────────────────────────────────
+    # ── Gemini Primary Provider ─────────────────────────────
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-3.5-flash"
+    GEMINI_FLASH_MODEL: str = "gemini-3.5-flash"
+    GEMINI_FLASH_LITE_MODEL: str = "gemini-3.5-flash-lite"
     MAX_COMMITS_FOR_SHIFT_DETECTION: int = 500
+
+    # ── Groq Secondary Provider ─────────────────────────────
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_TIMEOUT: int = 30
 
 
 settings = Settings()
