@@ -3,7 +3,8 @@ AI Router — Exposes endpoints for Gemini AI intelligence.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, status
+from collections import defaultdict
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import CurrentUser, UserDB
@@ -19,7 +20,7 @@ class AISummaryResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    
+
 class ChatResponse(BaseModel):
     answer: str
 
@@ -28,25 +29,21 @@ class ChatResponse(BaseModel):
 async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
     """Generates AI summary of repository evolution using Gemini."""
     try:
-        # 1. Fetch repo metadata
         repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
-        total_commits = repo_res.data[0].get("total_commits", 0)
 
-        # 2. Fetch top 10 hotspot files by commit count
+        # Fetch file diffs joined with commits for hotspot aggregation
         hotspots_raw = (
             db.table("file_diffs")
-            .select("file_path, insertions, deletions, commits!inner(author_name)")
+            .select("file_path, commits!inner(author_name)")
             .eq("repo_id", repo_id)
-            .limit(1000)
+            .limit(2000)
             .execute()
         )
 
-        # Aggregate hotspots manually
-        from collections import defaultdict
         file_stats = defaultdict(lambda: {"commits_count": 0, "authors": defaultdict(int)})
         for row in (hotspots_raw.data or []):
             path = row["file_path"]
@@ -63,23 +60,16 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
                 "top_author": top_author,
             })
 
-        # 3. Simple bus factor: count unique authors across all commits
-        authors_res = (
-            db.table("commits")
-            .select("author_name")
-            .eq("repo_id", repo_id)
-            .execute()
-        )
+        # Count unique authors for bus factor estimate
+        authors_res = db.table("commits").select("author_name").eq("repo_id", repo_id).execute()
         unique_authors = set(r["author_name"] for r in (authors_res.data or []) if r.get("author_name"))
         bus_factor = max(len(unique_authors), 1)
 
-        # 4. Generate AI summary
         summary_text = await generate_evolution_summary(
             repo_name=repo_name,
             hotspots=hotspots,
             bus_factor=bus_factor,
         )
-
         return {"summary": summary_text}
 
     except HTTPException:
@@ -98,9 +88,9 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB):
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
-        total_commits = repo_res.data[0].get("total_commits", 0)
+        total_commits = repo_res.data[0].get("total_commits") or 0
 
-        # Fetch significant commits for context
+        # Fetch all commits ordered chronologically — no dependency on summary
         commits_res = (
             db.table("commits")
             .select("author_name, committed_at, message")
@@ -130,28 +120,29 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB):
 async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUser, db: UserDB):
     """Answers Q&A questions about the repository (Ephemeral, not cached)."""
     try:
-        repo_res = db.table("repositories").select("name").eq("id", repo_id).execute()
+        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
+        total_commits = repo_res.data[0].get("total_commits", 0)
 
-        # Build a quick context string from the repo's top files
+        # Build context from top files
         hotspots_raw = (
             db.table("file_diffs")
-            .select("file_path, insertions, deletions")
+            .select("file_path")
             .eq("repo_id", repo_id)
-            .limit(500)
+            .limit(1000)
             .execute()
         )
 
-        from collections import defaultdict
         file_counts = defaultdict(int)
         for row in (hotspots_raw.data or []):
             file_counts[row["file_path"]] += 1
 
         top_files = sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:15]
-        context = f"Repository '{repo_name}' top files by commit frequency:\n"
+        context = f"Repository: '{repo_name}', {total_commits} total commits\n"
+        context += "Most frequently changed files:\n"
         context += "\n".join(f"- {f} ({c} commits)" for f, c in top_files)
 
         answer_text = await answer_qa(repo_name, payload.question, context)
