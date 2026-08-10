@@ -45,10 +45,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.routers import health, repositories, analytics, ai
+
 # Mount routers
 app.include_router(health.router)
 app.include_router(repositories.router)
 app.include_router(analytics.router)
+app.include_router(ai.router)
 
 
 @app.get("/")

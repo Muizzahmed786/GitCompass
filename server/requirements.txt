@@ -1,8 +1,9 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
-supabase==2.9.1
+supabase>=2.11.0
 python-dotenv==1.0.1
-pydantic-settings==2.5.2
+pydantic-settings>=2.7.1
 gitpython==3.1.43
 PyJWT==2.9.0
 cryptography==43.0.1
+google-genai>=0.1.043

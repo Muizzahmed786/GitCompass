@@ -61,9 +61,17 @@ export async function api(path, options = {}) {
 api.get = (path) => api(path, { method: "GET" });
 
 api.post = (path, body) =>
-  api(path, { method: "POST", body: JSON.stringify(body) });
+  api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
 api.put = (path, body) =>
-  api(path, { method: "PUT", body: JSON.stringify(body) });
+  api(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined });
 
 api.delete = (path) => api(path, { method: "DELETE" });
+
+/**
+ * AI Endpoints
+ */
+api.getAISummary = (repoId) => api.post(`/api/ai/summary/${repoId}`);
+api.getAIShifts = (repoId) => api.post(`/api/ai/shifts/${repoId}`);
+api.askAIChat = (repoId, question) => api.post(`/api/ai/chat/${repoId}`, { question });
+
