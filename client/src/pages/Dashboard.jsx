@@ -432,6 +432,19 @@ export default function Dashboard({ user }) {
                     )}
                   </div>
                   <StatusBadge status={repo.status} />
+                  {repo.status === 'mining' && repo.mining_progress !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 h-1.5 bg-surface-hover rounded-full overflow-hidden border border-border">
+                        <div 
+                          className="h-full bg-primary-500 rounded-full transition-all duration-300"
+                          style={{ width: `${repo.mining_progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-medium text-text-secondary w-7">
+                        {repo.mining_progress}%
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <a

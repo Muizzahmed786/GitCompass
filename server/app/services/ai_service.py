@@ -159,3 +159,44 @@ Keep your answer concise and technical. Use markdown for formatting where it hel
     except Exception as exc:
         logger.error("Gemini API call failed for Q&A: %s", exc)
         return f"Failed to answer question: {exc}"
+
+
+async def generate_development_story(repo_name: str, timeline_data: dict) -> str:
+    """Generates a non-technical, chronological story retelling how the repository evolved over time."""
+    client = get_gemini_client()
+    if not client:
+        return "AI Analysis Unavailable: GEMINI_API_KEY environment variable is not configured."
+
+    import json
+    compact_json = json.dumps(timeline_data, separators=(',', ':'))
+
+    prompt = f"""You are telling the development story of the repository '{repo_name}' based on its chronological Git history summary.
+
+Chronological Timeline Summary (JSON):
+{compact_json}
+
+Write a short, intuitive, chronological story explaining how this project came together over time.
+
+STRICT RULES:
+- Use simple, approachable language. Feel like a concise narrative rather than a list of Git statistics.
+- Connect related changes into a coherent progression over time.
+- Only use information supported by the provided timeline summary.
+- NEVER invent developer intentions, motivations, unevidenced features, architectural decisions, or events that are not in the data.
+- Avoid excessive technical terminology or dramatic/marketing-style language.
+- Structure it with short chronological phase indicators (e.g., **Getting Started → Building Core Features → Recent Progression** or similar), including ONLY phases supported by the data.
+- CRITICAL: If the timeline data is too sparse or history is insufficient to form a story, explicitly state: "The available repository history is insufficient to establish a clear story."
+"""
+
+    try:
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.2)
+        )
+        return response.text
+    except Exception as exc:
+        logger.error("Gemini API call failed for development story: %s", exc)
+        return f"Failed to generate development story: {exc}"
+
+
+

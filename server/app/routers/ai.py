@@ -8,7 +8,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.dependencies import CurrentUser, UserDB
-from app.services.ai_service import generate_evolution_summary, detect_architecture_shifts, answer_qa
+from app.services.ai_service import (
+    generate_evolution_summary,
+    detect_architecture_shifts,
+    answer_qa,
+    generate_development_story,
+)
+from datetime import datetime
+
 
 logger = logging.getLogger("gitcompass.routers.ai")
 
@@ -176,3 +183,95 @@ async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUs
     except Exception as exc:
         logger.error("AI chat failed for repo %s: %s", repo_id, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI chat failed: {exc}")
+
+
+@router.post("/story/{repo_id}")
+async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB):
+    """Generates a narrative development story based on monthly chronological Git aggregation."""
+    try:
+        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
+        if not repo_res.data:
+            raise HTTPException(status_code=404, detail="Repository not found")
+
+        repo_name = repo_res.data[0].get("name") or "Unknown"
+
+        # Fetch commits chronologically
+        commits_res = (
+            db.table("commits")
+            .select("id, committed_at, message, insertions, deletions")
+            .eq("repo_id", repo_id)
+            .order("committed_at", desc=False)
+            .limit(500)
+            .execute()
+        )
+
+        commits = commits_res.data or []
+        if len(commits) < 3:
+            return {"story": "The available repository history is insufficient to establish a clear story."}
+
+        # Group by month YYYY-MM
+        monthly_groups = defaultdict(lambda: {
+            "commit_count": 0,
+            "additions": 0,
+            "deletions": 0,
+            "messages": []
+        })
+
+        for c in commits:
+            dt_str = c.get("committed_at", "")[:7] or "Unknown"
+            grp = monthly_groups[dt_str]
+            grp["commit_count"] += 1
+            grp["additions"] += c.get("insertions") or 0
+            grp["deletions"] += c.get("deletions") or 0
+            msg = (c.get("message") or "").strip().split("\n")[0]
+            if msg and len(msg) > 5 and msg not in grp["messages"]:
+                grp["messages"].append(msg)
+
+        # Build timeline periods list
+        timeline_periods = []
+        for period, data in sorted(monthly_groups.items(), key=lambda x: x[0]):
+            timeline_periods.append({
+                "period": period,
+                "commit_count": data["commit_count"],
+                "total_insertions": data["additions"],
+                "total_deletions": data["deletions"],
+                "sample_messages": data["messages"][:4]  # max 4 sample messages per month
+            })
+
+        # Compress older months if history spans more than 12 periods
+        if len(timeline_periods) > 12:
+            compressed = []
+            chunk_size = (len(timeline_periods) + 11) // 12
+            for i in range(0, len(timeline_periods), chunk_size):
+                chunk = timeline_periods[i:i + chunk_size]
+                start_p = chunk[0]["period"]
+                end_p = chunk[-1]["period"]
+                label = start_p if start_p == end_p else f"{start_p} to {end_p}"
+                c_count = sum(x["commit_count"] for x in chunk)
+                ins = sum(x["total_insertions"] for x in chunk)
+                dels = sum(x["total_deletions"] for x in chunk)
+                msgs = []
+                for x in chunk:
+                    msgs.extend(x["sample_messages"])
+                compressed.append({
+                    "period": label,
+                    "commit_count": c_count,
+                    "total_insertions": ins,
+                    "total_deletions": dels,
+                    "sample_messages": msgs[:5]
+                })
+            timeline_periods = compressed
+
+        story_text = await generate_development_story(
+            repo_name=repo_name,
+            timeline_data={"periods": timeline_periods}
+        )
+        return {"story": story_text}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Development story failed for repo %s: %s", repo_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Development story generation failed: {exc}")
+
+

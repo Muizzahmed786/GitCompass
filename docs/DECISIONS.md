@@ -123,8 +123,11 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Trade-offs Accepted:** Adds slightly more data wrangling logic into `routers/ai.py`, decoupling the AI's "analytical" capability from raw text parsing, but results in much cheaper, faster, and more deterministic AI responses.
 - **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`.
 
-### [2026-08-11] - UI Component Rendering for AI Responses (`react-markdown`)
-- **Context / Problem:** The Gemini API returns responses utilizing markdown formatting, which React renders as raw text strings (e.g., displaying `**bold**` literally).
-- **Decision:** Added `react-markdown` to the frontend stack to parse LLM outputs. 
-- **Rationale:** Standard, safe way to render basic markdown without dangerously setting inner HTML. Tailwind's `@tailwindcss/typography` (`prose` classes) are applied to style the parsed elements consistently with the design system.
-- **Affected Files / Flow:** `client/package.json`, `client/src/components/AISummaryCard.jsx`, `client/src/components/ArchitectureTimeline.jsx`, `client/src/components/QAChatAssistant.jsx`.
+### [2026-08-11] - AI Insights Enhancements: Development Story & AI-Assistance Signal Score
+- **Context / Problem:** Users requested a narrative retelling of repository history (Development Story) and an evidence-based pattern evaluation rather than an arbitrary "AI Likelihood" percentage meter. Additionally, the chat assistant consumed valuable layout space in the analytics grid.
+- **Decision:**
+  1. Implemented **Development Story** (`/api/ai/story`) using month-by-month chronological backend aggregation.
+  2. Overhauled "AI Likelihood" into **AI-Assistance Signal Score** (`/api/ai/signals`). Calculated entropy metrics natively in Python (repetition %, median insertions, burst frequency) and passed them to Gemini to output a score (out of 100 or null), confidence level, concrete signals array, and permanent disclaimer. Enforced minimum-data validation (< 5 commits returns `score: null`).
+  3. Converted `QAChatAssistant` from an inline card into a global floating chatbot widget with fixed bottom-right positioning (`position: fixed`).
+- **Rationale:** Minimizes token usage via Python-side metric pre-calculation and monthly aggregation. Ensures AI cannot hallucinate non-existent phases or claim absolute proof of AI authorship. Moving chat to a FAB optimizes screen real estate.
+- **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/components/AIDevelopmentStory.jsx`, `client/src/components/AIAssistanceSignal.jsx`, `client/src/components/QAChatAssistant.jsx`, `client/src/pages/RepositoryAnalytics.jsx`.

@@ -44,6 +44,7 @@ class RepositoryResponse(BaseModel):
     default_branch: str = "main"
     status: str
     error_message: Optional[str] = None
+    mining_progress: Optional[int] = 0
     total_commits: int = 0
     total_files: int = 0
     latest_commit_sha: Optional[str] = None

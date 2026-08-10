@@ -339,7 +339,12 @@ Whenever a file is added, modified, or refactored:
 - **Inputs:** `repoId` prop, user input string.
 - **Outputs:** Renders a scrollable chat UI with user/assistant bubbles formatted via `react-markdown`, complete with individual copy/regenerate controls and global chat copy.
 
-### [client/src/components/AIVibeMeter.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIVibeMeter.jsx)
-- **Role:** Visual indicator showing the likelihood percentage that the repository was AI-generated based on commit entropy / patterns.
+### [client/src/components/AIDevelopmentStory.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIDevelopmentStory.jsx)
+- **Role:** UI component that renders a short, narrative retelling of how the repository evolved over time.
 - **Inputs:** `repoId` prop.
-- **Outputs:** Renders a sleek progress bar meter with 25%, 50%, and 75% visual markers.
+- **Outputs:** Renders a non-technical, chronological story using `react-markdown` with copy and reload controls.
+
+### [client/src/components/AIAssistanceSignal.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIAssistanceSignal.jsx)
+- **Role:** Analytical metric card displaying the strength of observable commit patterns associated with AI-assisted development.
+- **Inputs:** `repoId` prop.
+- **Outputs:** Renders the Signal Score (out of 100 or null handling), confidence level badge, observable signal list, short explanation, and permanent limitation disclaimer.

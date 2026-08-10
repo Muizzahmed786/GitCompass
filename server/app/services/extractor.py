@@ -74,7 +74,7 @@ def parse_git_path(path_str: str) -> Tuple[str, Optional[str], bool]:
 
 
 def extract_git_history(
-    repo_dir: str, repo_id: str, user_id: str, since_sha: Optional[str] = None
+    repo_dir: str, repo_id: str, user_id: str, since_sha: Optional[str] = None, progress_callback=None
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], int, int, Optional[str]]:
     """Bulk parses Git history for a repository.
 
@@ -83,8 +83,26 @@ def extract_git_history(
     """
     logger.info("Extracting Git history for repo %s from %s (since_sha=%s)", repo_id, repo_dir, since_sha)
 
-    # Bulk git log command with --numstat and rename detection (-M)
     log_range = f"{since_sha}..HEAD" if since_sha else "HEAD"
+
+    # Pre-flight check: total expected commits
+    total_commits_expected = 0
+    try:
+        count_proc = subprocess.run(
+            ["git", "rev-list", "--count", log_range],
+            cwd=repo_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=30,
+        )
+        if count_proc.returncode == 0:
+            total_commits_expected = int(count_proc.stdout.strip())
+            logger.info("Pre-flight check: Expecting %d commits for %s", total_commits_expected, repo_id)
+    except Exception as exc:
+        logger.warning("Failed to count expected commits: %s", exc)
+
+    # Bulk git log command with --numstat and rename detection (-M)
     cmd = [
         "git",
         "log",
@@ -114,6 +132,9 @@ def extract_git_history(
     current_commit: Optional[Dict[str, Any]] = None
     commit_insertions = 0
     commit_deletions = 0
+    
+    commits_processed = 0
+    last_reported_pct = 0
 
     try:
         for line in proc.stdout:
@@ -127,6 +148,14 @@ def extract_git_history(
                     current_commit["insertions"] = commit_insertions
                     current_commit["deletions"] = commit_deletions
                     commits.append(current_commit)
+                    
+                    commits_processed += 1
+                    
+                    if progress_callback and total_commits_expected > 0:
+                        current_pct = int((commits_processed / total_commits_expected) * 100)
+                        if current_pct > last_reported_pct:
+                            progress_callback(current_pct)
+                            last_reported_pct = current_pct
 
                 # Reset per-commit trackers
                 commit_insertions = 0

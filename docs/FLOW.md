@@ -222,12 +222,13 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Phase 5 AI Prompt Optimization & UI Enhancements  
+> **Active Task / Focus Area:** Phase 5 AI Insights Overhaul (Development Story, AI-Assistance Signal Score & Floating Chat)  
 > **Modified Paths:**
-> - [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py) - Centralized JSON payload aggregation for LLM
-> - [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py) - Upgraded to objective/observational Gemini prompts
-> - [client/src/pages/Dashboard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/pages/Dashboard.jsx) - Added dynamic branch fetching and repository retry
-> - [client/src/components/AISummaryCard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AISummaryCard.jsx) - Integrated `react-markdown` and copy/retry controls
+> - [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py) - Added `/api/ai/story` and `/api/ai/signals` endpoints with python backend calculations
+> - [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py) - Added `generate_development_story` and `analyze_ai_signals` Gemini functions
+> - [client/src/components/AIDevelopmentStory.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIDevelopmentStory.jsx) - New narrative story component
+> - [client/src/components/AIAssistanceSignal.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIAssistanceSignal.jsx) - Replaced `AIVibeMeter` with evidence-based Signal Score card
+> - [client/src/components/QAChatAssistant.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/QAChatAssistant.jsx) - Floating fixed-position chatbot widget
 
 ---
 

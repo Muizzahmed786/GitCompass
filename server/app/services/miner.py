@@ -60,17 +60,25 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
         # Step 2: Clone repository into temp dir
         clone_repository(github_url, temp_dir, branch)
 
-        # Step 3: Update status -> mining
+        # Step 3: Update status -> mining and progress -> 0
         db.table("repositories").update(
             {
                 "status": "mining",
+                "mining_progress": 0,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", repo_id).execute()
 
+        # Define progress callback
+        def handle_progress(pct: int):
+            try:
+                db.table("repositories").update({"mining_progress": pct}).eq("id", repo_id).execute()
+            except Exception as p_exc:
+                logger.warning("Failed to update progress for repo %s: %s", repo_id, p_exc)
+
         # Step 4: Extract commits & diffs
         commits, file_diffs, total_commits, total_files, latest_commit_sha = extract_git_history(
-            temp_dir, repo_id, user_id
+            temp_dir, repo_id, user_id, progress_callback=handle_progress
         )
 
         # Step 5: Batch insert data to Supabase
@@ -81,6 +89,9 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
         batch_insert("file_diffs", file_diffs)
 
         # Step 6: Mark repository as ready
+        # Explicit completion ordering: mining_progress = 100 first, then status = "ready"
+        db.table("repositories").update({"mining_progress": 100}).eq("id", repo_id).execute()
+
         update_payload = {
             "status": "ready",
             "total_commits": total_commits,
@@ -104,6 +115,7 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
                 {
                     "status": "error",
                     "error_message": err_msg[:500],  # Truncate if too long
+                    "mining_progress": 0,            # Clear progress on error
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("id", repo_id).execute()
@@ -127,20 +139,28 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
     temp_dir = tempfile.mkdtemp(prefix="gitcompass_sync_")
 
     try:
-        # Step 1: Update status -> mining
+        # Step 1: Update status -> mining and progress -> 0
         db.table("repositories").update(
             {
                 "status": "mining",
+                "mining_progress": 0,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ).eq("id", repo_id).execute()
+
+        # Define progress callback
+        def handle_sync_progress(pct: int):
+            try:
+                db.table("repositories").update({"mining_progress": pct}).eq("id", repo_id).execute()
+            except Exception as p_exc:
+                logger.warning("Failed to update sync progress for repo %s: %s", repo_id, p_exc)
 
         # Step 2: Clone repository into temp dir
         clone_repository(github_url, temp_dir, branch)
 
         # Step 3: Incremental extract commits & diffs
         commits, file_diffs, new_commits_cnt, new_files_cnt, latest_commit_sha = extract_git_history(
-            temp_dir, repo_id, user_id, since_sha=since_sha
+            temp_dir, repo_id, user_id, since_sha=since_sha, progress_callback=handle_sync_progress
         )
 
         if commits:
@@ -149,6 +169,8 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
             batch_insert("file_diffs", file_diffs)
 
         # Step 4: Re-calculate totals and mark ready
+        db.table("repositories").update({"mining_progress": 100}).eq("id", repo_id).execute()
+
         total_commits = (existing_repo.get("total_commits") or 0) + len(commits)
         update_payload = {
             "status": "ready",
@@ -171,6 +193,7 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
                 {
                     "status": "ready",  # Revert back to ready status on sync error
                     "error_message": f"Sync failed: {err_msg[:300]}",
+                    "mining_progress": 0,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
             ).eq("id", repo_id).execute()

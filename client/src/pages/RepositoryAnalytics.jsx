@@ -9,9 +9,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import AISummaryCard from "../components/AISummaryCard";
+import AIDevelopmentStory from "../components/AIDevelopmentStory";
 import ArchitectureTimeline from "../components/ArchitectureTimeline";
 import QAChatAssistant from "../components/QAChatAssistant";
-import AIVibeMeter from "../components/AIVibeMeter";
 
 const COMMIT_TYPE_OPTIONS = [
   { value: "all", label: "All Types" },
@@ -263,17 +263,19 @@ export default function RepositoryAnalytics() {
           </svg>
           AI Architectural Insights
         </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-3 gap-6">
+          <div className="col-span-1 space-y-6">
             <AISummaryCard repoId={id} />
             <ArchitectureTimeline repoId={id} />
           </div>
-          <div className="lg:col-span-1">
-            <QAChatAssistant repoId={id} />
-            <AIVibeMeter repoId={id} />
+          <div className="col-span-2">
+            <AIDevelopmentStory repoId={id} />
           </div>
         </div>
       </div>
+
+      {/* Global Floating AI Chatbot Widget */}
+      <QAChatAssistant repoId={id} />
 
       {/* ── Commit Type Breakdown ────────────────────────── */}
       {Object.keys(commitTypeDist).length > 0 && (
