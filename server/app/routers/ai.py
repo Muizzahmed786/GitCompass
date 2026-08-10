@@ -34,21 +34,24 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
+        total_commits = repo_res.data[0].get("total_commits", 0)
 
         # Fetch file diffs joined with commits for hotspot aggregation
         hotspots_raw = (
             db.table("file_diffs")
-            .select("file_path, commits!inner(author_name)")
+            .select("file_path, insertions, deletions, commits!inner(author_name)")
             .eq("repo_id", repo_id)
             .limit(2000)
             .execute()
         )
 
-        file_stats = defaultdict(lambda: {"commits_count": 0, "authors": defaultdict(int)})
+        file_stats = defaultdict(lambda: {"commits_count": 0, "insertions": 0, "deletions": 0, "authors": defaultdict(int)})
         for row in (hotspots_raw.data or []):
             path = row["file_path"]
             author = (row.get("commits") or {}).get("author_name", "Unknown")
             file_stats[path]["commits_count"] += 1
+            file_stats[path]["insertions"] += row.get("insertions", 0)
+            file_stats[path]["deletions"] += row.get("deletions", 0)
             file_stats[path]["authors"][author] += 1
 
         hotspots = []
@@ -57,18 +60,38 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
             hotspots.append({
                 "file_path": path,
                 "commits_count": stats["commits_count"],
-                "top_author": top_author,
+                "insertions": stats["insertions"],
+                "deletions": stats["deletions"],
+                "top_author": top_author
             })
 
-        # Count unique authors for bus factor estimate
+        # Count unique authors and commits per author
         authors_res = db.table("commits").select("author_name").eq("repo_id", repo_id).execute()
-        unique_authors = set(r["author_name"] for r in (authors_res.data or []) if r.get("author_name"))
-        bus_factor = max(len(unique_authors), 1)
+        author_counts = defaultdict(int)
+        for r in (authors_res.data or []):
+            if r.get("author_name"):
+                author_counts[r["author_name"]] += 1
+        
+        bus_factor = max(len(author_counts), 1)
+        top_authors = [{"author": k, "commits": v} for k, v in sorted(author_counts.items(), key=lambda x: x[1], reverse=True)[:5]]
+
+        aggregated_data = {
+            "repository": {
+                "name": repo_name,
+                "total_commits": total_commits,
+                "total_files_changed": len(file_stats),
+            },
+            "contributors": {
+                "total_count": len(author_counts),
+                "bus_factor": bus_factor,
+                "top_authors": top_authors
+            },
+            "hotspots": hotspots
+        }
 
         summary_text = await generate_evolution_summary(
             repo_name=repo_name,
-            hotspots=hotspots,
-            bus_factor=bus_factor,
+            aggregated_data=aggregated_data
         )
         return {"summary": summary_text}
 

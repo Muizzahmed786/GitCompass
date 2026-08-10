@@ -246,9 +246,10 @@ Whenever a file is added, modified, or refactored:
 
 ### [client/src/pages/Dashboard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/pages/Dashboard.jsx)
 - **Role:** User dashboard listing tracked repositories, status polling, and repository addition modal.
-- **Inputs:** User props (`user`), API response data from `/api/repositories`.
+- **Inputs:** User props (`user`), API response data from `/api/repositories`, GitHub API public branches.
 - **Outputs:**
-  - Renders repository grid, mining status badges, commit counts, and add/delete forms.
+  - Renders repository grid, mining status badges, commit counts, retry controls, and add/delete forms.
+  - Dynamically fetches and displays branches from GitHub API when a valid URL is typed.
   - Polls backend every 3 seconds while mining tasks are active.
 
 ---
@@ -315,8 +316,8 @@ Whenever a file is added, modified, or refactored:
 
 ### [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py)
 - **Role:** Core Gemini integration wrapper.
-- **Inputs:** Repository names, commit lists, hotspot data, user questions, and `GEMINI_API_KEY`.
-- **Outputs:** Generated text (summaries, chat answers) or structured JSON (architectural shifts) directly from the LLM.
+- **Inputs:** `repo_name`, `aggregated_data` dict (for summaries), commit lists, user questions, and `GEMINI_API_KEY`.
+- **Outputs:** Generated text (summaries, chat answers) or structured JSON (architectural shifts) directly from the LLM, tightly formatted without assessment fillers.
 
 ### [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py)
 - **Role:** API endpoints exposing AI services with built-in caching.
@@ -326,14 +327,19 @@ Whenever a file is added, modified, or refactored:
 ### [client/src/components/AISummaryCard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AISummaryCard.jsx)
 - **Role:** UI to display the 3-paragraph executive evolution summary.
 - **Inputs:** `repoId` prop.
-- **Outputs:** Renders the text summary, loading skeleton, and refresh button.
+- **Outputs:** Renders the text summary using `react-markdown`, loading skeleton, copy button, and retry/refresh controls.
 
 ### [client/src/components/ArchitectureTimeline.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/ArchitectureTimeline.jsx)
 - **Role:** UI to display chronologically mapped architectural shifts.
 - **Inputs:** `repoId` prop.
-- **Outputs:** Renders a vertical timeline of JSON-derived architecture shifts or error alerts (e.g. if commits > 500).
+- **Outputs:** Renders a vertical timeline of JSON-derived architecture shifts using `react-markdown`, error alerts (e.g. if commits > 500), copy, and refresh controls.
 
 ### [client/src/components/QAChatAssistant.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/QAChatAssistant.jsx)
 - **Role:** Interactive ephemeral chat widget for querying repository architecture.
 - **Inputs:** `repoId` prop, user input string.
-- **Outputs:** Renders a scrollable chat UI with user/assistant bubbles and loading indicators.
+- **Outputs:** Renders a scrollable chat UI with user/assistant bubbles formatted via `react-markdown`, complete with individual copy/regenerate controls and global chat copy.
+
+### [client/src/components/AIVibeMeter.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIVibeMeter.jsx)
+- **Role:** Visual indicator showing the likelihood percentage that the repository was AI-generated based on commit entropy / patterns.
+- **Inputs:** `repoId` prop.
+- **Outputs:** Renders a sleek progress bar meter with 25%, 50%, and 75% visual markers.

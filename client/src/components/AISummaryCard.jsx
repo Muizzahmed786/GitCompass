@@ -57,9 +57,9 @@ export default function AISummaryCard({ repoId }) {
           </svg>
           AI Evolution Summary
         </h3>
-        {generated && (
+        {(generated || !!error) && (
           <div className="flex items-center gap-1">
-            <CopyButton text={summary} />
+            {summary && <CopyButton text={summary} />}
             <button
               onClick={fetchSummary}
               disabled={loading}

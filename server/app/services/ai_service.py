@@ -4,7 +4,9 @@ AI Service — Integrates Gemini API to generate evolution summaries, architectu
 
 import logging
 from typing import Dict, List, Optional
+# pyrefly: ignore [missing-import]
 from google import genai
+# pyrefly: ignore [missing-import]
 from google.genai import types
 
 from app.config import settings
@@ -20,35 +22,39 @@ def get_gemini_client() -> Optional[genai.Client]:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-async def generate_evolution_summary(repo_name: str, hotspots: List[Dict], bus_factor: int) -> str:
-    """Generates a concise developer-focused summary of the repository."""
+async def generate_evolution_summary(repo_name: str, aggregated_data: dict) -> str:
+    """Generates a concise developer-focused summary of the repository from aggregated JSON data."""
     client = get_gemini_client()
     if not client:
         return "AI Analysis Unavailable: GEMINI_API_KEY environment variable is not configured."
 
-    hotspot_lines = "\n".join(
-        [f"- {h['file_path']} ({h['commits_count']} commits, top author: {h['top_author']})"
-         for h in hotspots[:10]]
-    ) or "No hotspot data available."
+    import json
+    # Minified JSON to save tokens
+    compact_json = json.dumps(aggregated_data, separators=(',', ':'))
 
     prompt = f"""You are analyzing a software repository called '{repo_name}' based on its Git history metrics.
 
-Data:
-- Bus Factor: {bus_factor} (number of contributors responsible for 50%+ of commits)
-- Top files by commit frequency:
-{hotspot_lines}
+Aggregated Data (JSON):
+{compact_json}
 
-Write a short, factual summary (3 short paragraphs, plain developer language) covering:
-1. What the commit data suggests about which parts of the codebase are most actively developed
-2. What the bus factor and file ownership data indicates about team structure and risk
-3. Any concrete observations about code health based on the data (no speculation)
+Write a short, factual summary covering exactly the following three sections. You must use these exact markdown subheadings for each section:
 
-Rules:
-- Write like a senior engineer summarizing metrics to a teammate, not an executive report
-- Do not use words like "robust", "pivotal", "paramount", "leverage", or "strategic"
-- Do not recommend actions unless directly supported by the data
-- Be direct and brief. Each paragraph should be 2-3 sentences max
-- Use plain markdown (bold for file names is fine, no excessive headers)
+### Most Modified Files
+List the most actively developed files and their commit counts using concrete statistics.
+
+### Contributors & Ownership
+State the bus factor and describe the distribution of authorship among top authors using concrete statistics. Report Git authorship only; DO NOT infer actual knowledge, responsibility, expertise, or code ownership beyond the recorded commit data.
+
+### Development Patterns
+Note any observable patterns in the data (e.g., if development is concentrated in specific directories or file types).
+
+CRITICAL RULES:
+- Summarize the data; DO NOT assess it.
+- Describe raw Git statistics first, then state only directly observable patterns from those statistics.
+- DO NOT invent risks, conclusions, or recommendations. Do not use words like "risk", "danger", "should", "recommend", or "mitigate" unless explicitly supported by the data.
+- Do not use filler words like "robust", "pivotal", "paramount", "leverage", or "strategic".
+- Be direct and brief. Each section must be exactly 1 paragraph of 2-3 concise sentences max.
+- Do not add any new sections, recommendations, conclusions, or commentary outside these three sections.
 """
 
     try:

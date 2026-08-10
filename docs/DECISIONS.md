@@ -113,4 +113,18 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 
 ## 📝 Recent Decisions & Active Trade-offs
 
-*(Append new decision records here during ongoing development)*
+### [2026-08-11] - AI Prompt Optimization (Backend Aggregation vs. LLM Calculation)
+- **Context / Problem:** Passing raw lists of files, commits, and ownership data to the Gemini model in `routers/ai.py` caused high token usage and led to the model "hallucinating" subjective assessments rather than reporting factual data.
+- **Options Considered:**
+  1. Have Gemini process raw lists and do the math (high token usage).
+  2. Aggregate all metrics on the FastAPI backend and pass a tightly packed JSON object to the model.
+- **Decision:** Selected Option 2 (Backend Aggregation).
+- **Rationale:** Moving calculations like Top Authors, Total Files, and Churn to the Python backend drastically reduces the input token payload. Sending a strictly structured JSON object (via `json.dumps(..., separators=(',', ':'))`) removes unnecessary whitespace and gives the LLM clear, objective data to summarize. Prompt instructions were rewritten to strictly ban subjective assessment and prescriptive language.
+- **Trade-offs Accepted:** Adds slightly more data wrangling logic into `routers/ai.py`, decoupling the AI's "analytical" capability from raw text parsing, but results in much cheaper, faster, and more deterministic AI responses.
+- **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`.
+
+### [2026-08-11] - UI Component Rendering for AI Responses (`react-markdown`)
+- **Context / Problem:** The Gemini API returns responses utilizing markdown formatting, which React renders as raw text strings (e.g., displaying `**bold**` literally).
+- **Decision:** Added `react-markdown` to the frontend stack to parse LLM outputs. 
+- **Rationale:** Standard, safe way to render basic markdown without dangerously setting inner HTML. Tailwind's `@tailwindcss/typography` (`prose` classes) are applied to style the parsed elements consistently with the design system.
+- **Affected Files / Flow:** `client/package.json`, `client/src/components/AISummaryCard.jsx`, `client/src/components/ArchitectureTimeline.jsx`, `client/src/components/QAChatAssistant.jsx`.

@@ -31,7 +31,7 @@ function CopyButton({ text, className = '' }) {
 function ChatMessage({ msg }) {
   const isUser = msg.role === 'user';
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} group`}>
+    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-4`}>
       <div className={`relative max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
         isUser
           ? 'bg-blue-600 text-white rounded-br-none'
@@ -44,12 +44,23 @@ function ChatMessage({ msg }) {
             <ReactMarkdown>{msg.content}</ReactMarkdown>
           </div>
         )}
-        {!isUser && (
-          <div className="absolute -bottom-5 left-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <CopyButton text={msg.content} />
-          </div>
-        )}
       </div>
+      {!isUser && (
+        <div className="flex items-center gap-2 mt-1 ml-1">
+          <CopyButton text={msg.content} />
+          {msg.onRetry && (
+            <button
+              onClick={msg.onRetry}
+              title="Regenerate response"
+              className="p-1 rounded text-text-tertiary hover:text-text-primary transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -77,14 +88,31 @@ export default function QAChatAssistant({ repoId }) {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
 
-    try {
-      const data = await api.askAIChat(repoId, userMessage);
-      setMessages(prev => [...prev, { role: 'assistant', content: data.answer }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
-    } finally {
-      setLoading(false);
-    }
+    const performChat = async (msg) => {
+      try {
+        const data = await api.askAIChat(repoId, msg);
+        setMessages(prev => [...prev, { role: 'assistant', content: data.answer, onRetry: () => retryMessage(msg) }]);
+      } catch (err) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${err.message}`, onRetry: () => retryMessage(msg) }]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const retryMessage = (msg) => {
+      setMessages(prev => {
+        // Remove the last AI response
+        const newMsgs = [...prev];
+        if (newMsgs[newMsgs.length - 1].role === 'assistant') {
+          newMsgs.pop();
+        }
+        return newMsgs;
+      });
+      setLoading(true);
+      performChat(msg);
+    };
+
+    await performChat(userMessage);
   };
 
   const handleClearChat = () => {
@@ -105,11 +133,21 @@ export default function QAChatAssistant({ repoId }) {
           </div>
           <h3 className="font-bold text-text-primary text-sm">AI Architect Chat</h3>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {/* Copy full conversation */}
-          <CopyButton
-            text={messages.map(m => `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`).join('\n\n')}
-          />
+          <button
+            onClick={async () => {
+              const fullChat = messages.map(m => `${m.role === 'user' ? 'You' : 'AI'}: ${m.content}`).join('\n\n');
+              await navigator.clipboard.writeText(fullChat);
+            }}
+            title="Copy entire chat"
+            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium bg-surface rounded border border-divider text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Copy Chat
+          </button>
           {/* Clear / new chat */}
           <button
             onClick={handleClearChat}

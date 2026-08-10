@@ -222,12 +222,12 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Phase 5 AI Intelligence Layer Integration  
+> **Active Task / Focus Area:** Phase 5 AI Prompt Optimization & UI Enhancements  
 > **Modified Paths:**
-> - [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py) - AI API endpoints
-> - [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py) - Gemini LLM integration logic
-> - [client/src/pages/RepositoryAnalytics.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/pages/RepositoryAnalytics.jsx) - Added AI Insights components
-> - [client/src/components/QAChatAssistant.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/QAChatAssistant.jsx) - Ephemeral chat widget
+> - [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py) - Centralized JSON payload aggregation for LLM
+> - [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py) - Upgraded to objective/observational Gemini prompts
+> - [client/src/pages/Dashboard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/pages/Dashboard.jsx) - Added dynamic branch fetching and repository retry
+> - [client/src/components/AISummaryCard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AISummaryCard.jsx) - Integrated `react-markdown` and copy/retry controls
 
 ---
 

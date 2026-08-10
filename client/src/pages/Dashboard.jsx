@@ -23,6 +23,8 @@ export default function Dashboard({ user }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newRepoUrl, setNewRepoUrl] = useState("");
   const [newRepoBranch, setNewRepoBranch] = useState("");
+  const [availableBranches, setAvailableBranches] = useState([]);
+  const [fetchingBranches, setFetchingBranches] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
 
@@ -38,6 +40,36 @@ export default function Dashboard({ user }) {
       }
     };
   }, []);
+
+  // Fetch branches when URL changes
+  useEffect(() => {
+    const fetchBranches = async () => {
+      const match = newRepoUrl.match(/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?/);
+      if (match) {
+        const owner = match[1];
+        const repo = match[2];
+        setFetchingBranches(true);
+        try {
+          const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches`);
+          if (res.ok) {
+            const data = await res.json();
+            setAvailableBranches(data.map(b => b.name));
+          } else {
+            setAvailableBranches([]);
+          }
+        } catch (e) {
+          setAvailableBranches([]);
+        } finally {
+          setFetchingBranches(false);
+        }
+      } else {
+        setAvailableBranches([]);
+      }
+    };
+
+    const timer = setTimeout(fetchBranches, 500);
+    return () => clearTimeout(timer);
+  }, [newRepoUrl]);
 
   // Set up auto-polling if any repository is actively mining
   useEffect(() => {
@@ -104,6 +136,18 @@ export default function Dashboard({ user }) {
       setFormError(err.message || "Failed to add repository.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRetryRepository = async (repo) => {
+    try {
+      await api.post("/api/repositories", { 
+        github_url: repo.github_url,
+        branch: repo.default_branch || undefined
+      });
+      await loadRepositories();
+    } catch (err) {
+      alert(`Failed to retry repository: ${err.message}`);
     }
   };
 
@@ -260,14 +304,28 @@ export default function Dashboard({ user }) {
                       className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
                       disabled={submitting}
                     />
-                    <input
-                      type="text"
-                      value={newRepoBranch}
-                      onChange={(e) => setNewRepoBranch(e.target.value)}
-                      placeholder="Branch (e.g. main)"
-                      className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
-                      disabled={submitting}
-                    />
+                    {availableBranches.length > 0 ? (
+                      <select
+                        value={newRepoBranch}
+                        onChange={(e) => setNewRepoBranch(e.target.value)}
+                        className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
+                        disabled={submitting}
+                      >
+                        <option value="">Default branch</option>
+                        {availableBranches.map(branch => (
+                          <option key={branch} value={branch}>{branch}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={newRepoBranch}
+                        onChange={(e) => setNewRepoBranch(e.target.value)}
+                        placeholder={fetchingBranches ? "Loading branches..." : "Branch (e.g. main)"}
+                        className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
+                        disabled={submitting || fetchingBranches}
+                      />
+                    )}
                   </div>
                   <p className="mt-2 text-xs text-text-tertiary">
                     Enter a public GitHub repository URL. The optional branch defaults to the primary branch. 
@@ -440,15 +498,26 @@ export default function Dashboard({ user }) {
                   </div>
                 )}
 
-                <button
-                  onClick={() => handleDeleteRepository(repo.id, repo.name)}
-                  className="p-2 text-text-tertiary hover:text-error hover:bg-error-light rounded-lg transition-colors cursor-pointer"
-                  title="Delete repository"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleRetryRepository(repo)}
+                    className="p-2 text-text-tertiary hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors cursor-pointer"
+                    title="Retry / Re-mine repository"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteRepository(repo.id, repo.name)}
+                    className="p-2 text-text-tertiary hover:text-error hover:bg-error-light rounded-lg transition-colors cursor-pointer"
+                    title="Delete repository"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

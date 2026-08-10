@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import AISummaryCard from "../components/AISummaryCard";
 import ArchitectureTimeline from "../components/ArchitectureTimeline";
 import QAChatAssistant from "../components/QAChatAssistant";
+import AIVibeMeter from "../components/AIVibeMeter";
 
 const COMMIT_TYPE_OPTIONS = [
   { value: "all", label: "All Types" },
@@ -269,6 +270,7 @@ export default function RepositoryAnalytics() {
           </div>
           <div className="lg:col-span-1">
             <QAChatAssistant repoId={id} />
+            <AIVibeMeter repoId={id} />
           </div>
         </div>
       </div>

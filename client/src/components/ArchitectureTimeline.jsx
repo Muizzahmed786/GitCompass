@@ -58,7 +58,7 @@ export default function ArchitectureTimeline({ repoId }) {
           </svg>
           Architecture Shift Timeline
         </h3>
-        {generated && (
+        {(generated || !!error) && (
           <div className="flex items-center gap-1">
             {shifts.length > 0 && <CopyButton text={shifts} />}
             <button
