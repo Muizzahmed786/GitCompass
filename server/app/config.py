@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # ── Gemini AI ─────────────────────────────────────────────
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash"
     MAX_COMMITS_FOR_SHIFT_DETECTION: int = 500
 
 

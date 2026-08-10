@@ -10,6 +10,7 @@ allowlisting when deploying to production.
 from contextlib import asynccontextmanager
 import logging
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
 
 from app.config import settings
