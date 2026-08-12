@@ -149,3 +149,18 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
   3. Converted `QAChatAssistant` from an inline card into a global floating chatbot widget with fixed bottom-right positioning (`position: fixed`).
 - **Rationale:** Minimizes token usage via Python-side metric pre-calculation and monthly aggregation. Ensures AI cannot hallucinate non-existent phases or claim absolute proof of AI authorship. Moving chat to a FAB optimizes screen real estate.
 - **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/components/AIDevelopmentStory.jsx`, `client/src/components/AIAssistanceSignal.jsx`, `client/src/components/QAChatAssistant.jsx`, `client/src/pages/RepositoryAnalytics.jsx`.
+
+### [2026-08-12] - Docker Containerization & Redis Infrastructure Setup
+- **Context / Problem:** Needed a robust caching & task queue infrastructure for GitCompass. Installing Redis locally on host machines introduces environment dependencies and setup friction.
+- **Options Considered:**
+  1. Local Redis installation on host OS / WSL2 directly.
+  2. Docker Compose containerization for FastAPI (`server`) and Redis (`redis:7-alpine`).
+- **Decision:** Selected Option 2 (Docker Compose containerization).
+- **Rationale:**
+  - Docker Compose provides reproducible, isolated development and production environments across platforms.
+  - The FastAPI server container connects to Redis seamlessly using Docker network service name `redis:6379`.
+  - `.dockerignore` optimizes build context from ~57.54 MB to ~3.19 kB by excluding `.env`, `.venv`, `.git`, `__pycache__`, etc.
+  - Secrets are securely injected into containers at runtime via `env_file` (`server/.env`).
+- **Trade-offs Accepted:**
+  - Container changes require `docker compose up -d --build` when new local modules or dependencies are added to rebuild container image context.
+- **Affected Files / Flow:** [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml), [Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile), [.dockerignore](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/.dockerignore), [redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py).

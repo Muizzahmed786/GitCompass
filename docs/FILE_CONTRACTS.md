@@ -57,6 +57,38 @@ Whenever a file is added, modified, or refactored:
 
 ---
 
+### [server/app/core/redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py)
+- **Role:** Centralized Redis client instance provider.
+- **Inputs:**
+  - Docker DNS network target host: `"redis"`
+  - TCP Port: `6379`
+  - Client parameter: `decode_responses=True`
+- **Outputs / Returns:**
+  - `redis_client`: Initialized `redis.Redis` client instance for executing key-value, caching, and ping commands (`redis_client.ping()`).
+
+---
+
+### [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml)
+- **Role:** Multi-container Docker orchestration for GitCompass.
+- **Inputs:**
+  - Service `server`: Docker context `./server`, environment file `./server/.env`, port forwarding `8000:8000`, dependency `redis`.
+  - Service `redis`: Image `redis:7-alpine`, container `gitcompass-redis`, port forwarding `6379:6379`.
+- **Outputs / Returns:**
+  - Running container stack with networked FastAPI backend (`gitcompass-server`) and Redis server (`gitcompass-redis`).
+
+---
+
+### [server/Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile)
+- **Role:** Docker image build manifest for FastAPI application.
+- **Inputs:**
+  - Base image: `python:3.13-slim`
+  - Dependencies: `requirements.txt`
+  - Source context: `server/` (filtered by `.dockerignore`)
+- **Outputs / Returns:**
+  - Built image `gitcompass-server:latest` exposing port 8000 with entrypoint `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+
+---
+
 ## 🌐 Backend — API Routers
 
 ### [server/app/routers/health.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/health.py)

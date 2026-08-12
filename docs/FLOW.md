@@ -220,15 +220,33 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ---
 
+### 6. Redis & Docker Container Infrastructure Flow
+
+```
+[Docker Compose]
+       │
+       ├── gitcompass-server container (FastAPI :8000)
+       │         │
+       │         └── app/core/redis.py ──(redis.Redis(host="redis", port=6379))──▶ gitcompass-redis container (:6379)
+       │                                                                                    │
+       └── gitcompass-redis container (redis:7-alpine) ◀───────────────────────────────────┘
+```
+
+**Call Sequence:**
+1. Docker Compose orchestrates containers over bridge network `gitcompass_default`.
+2. `server/app/core/redis.py` initializes a `redis.Redis` instance targeting hostname `redis` and port `6379`.
+3. Commands executed inside `gitcompass-server` container (e.g. `redis_client.ping()`) resolve `redis` to container `gitcompass-redis` via Docker DNS and return status.
+
+---
+
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Phase 5 AI Insights Overhaul (Development Story, AI-Assistance Signal Score & Floating Chat)  
+> **Active Task / Focus Area:** GitCompass Docker + Redis Integration & Verification  
 > **Modified Paths:**
-> - [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py) - Added `/api/ai/story` and `/api/ai/signals` endpoints with python backend calculations
-> - [server/app/services/ai_service.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py) - Added `generate_development_story` and `analyze_ai_signals` Gemini functions
-> - [client/src/components/AIDevelopmentStory.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIDevelopmentStory.jsx) - New narrative story component
-> - [client/src/components/AIAssistanceSignal.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIAssistanceSignal.jsx) - Replaced `AIVibeMeter` with evidence-based Signal Score card
-> - [client/src/components/QAChatAssistant.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/QAChatAssistant.jsx) - Floating fixed-position chatbot widget
+> - [server/app/core/redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py) - Centralized Redis client connection (`host="redis"`, `port=6379`, `decode_responses=True`)
+> - [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml) - Docker Compose multi-container configuration defining `server` (FastAPI) and `redis` (`redis:7-alpine`) services
+> - [server/Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile) - Python 3.13-slim server container build configuration
+> - [server/.dockerignore](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/.dockerignore) - Build context optimization excluding `.env`, `.venv`, `.git`, `__pycache__`
 
 ---
 
