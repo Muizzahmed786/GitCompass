@@ -241,12 +241,14 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** GitCompass Docker + Redis Integration & Verification  
+> **Active Task / Focus Area:** Explicit AI Model Selection & Component Layout Fixes
 > **Modified Paths:**
-> - [server/app/core/redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py) - Centralized Redis client connection (`host="redis"`, `port=6379`, `decode_responses=True`)
-> - [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml) - Docker Compose multi-container configuration defining `server` (FastAPI) and `redis` (`redis:7-alpine`) services
-> - [server/Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile) - Python 3.13-slim server container build configuration
-> - [server/.dockerignore](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/.dockerignore) - Build context optimization excluding `.env`, `.venv`, `.git`, `__pycache__`
+> - `server/app/routers/ai.py` - AI endpoints accepting `AIModelChoice` in payload
+> - `server/app/services/ai_service.py` - Explicit `selected_model` parameter injected into `build_provider_chain`
+> - `client/src/lib/api.js` - Updated `getAISummary` and `getAIShifts` to accept payload
+> - `client/src/components/AISummaryCard.jsx` - Added model dropdown and internal scroll constraints
+> - `client/src/components/ArchitectureTimeline.jsx` - Added model dropdown
+> - `client/src/components/AIDevelopmentStory.jsx` - Added model dropdown and internal scroll constraints
 
 ---
 

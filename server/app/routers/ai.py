@@ -4,6 +4,8 @@ AI Router — Exposes endpoints for Gemini AI intelligence.
 
 import logging
 from collections import defaultdict
+from enum import Enum
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -22,6 +24,15 @@ logger = logging.getLogger("gitcompass.routers.ai")
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
+class AIModelChoice(str, Enum):
+    auto = "auto"
+    gemini_flash = "gemini_flash"
+    gemini_flash_lite = "gemini_flash_lite"
+    groq = "groq"
+
+class AIRequest(BaseModel):
+    model: AIModelChoice = AIModelChoice.auto
+
 class AISummaryResponse(BaseModel):
     summary: str
 
@@ -33,7 +44,7 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/summary/{repo_id}", response_model=AISummaryResponse)
-async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
+async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Generates AI summary of repository evolution using Gemini."""
     try:
         repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
@@ -96,9 +107,11 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
             "hotspots": hotspots
         }
 
+        selected_model = payload.model.value if payload else "auto"
         summary_text = await generate_evolution_summary(
             repo_name=repo_name,
-            aggregated_data=aggregated_data
+            aggregated_data=aggregated_data,
+            selected_model=selected_model
         )
         return {"summary": summary_text}
 
@@ -110,7 +123,7 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB):
 
 
 @router.post("/shifts/{repo_id}")
-async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB):
+async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Detects architecture shifts using Gemini. Limited to repos with <= MAX_COMMITS."""
     try:
         repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
@@ -130,10 +143,12 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB):
             .execute()
         )
 
+        selected_model = payload.model.value if payload else "auto"
         shifts = await detect_architecture_shifts(
             repo_name=repo_name,
             total_commits=total_commits,
-            significant_commits=commits_res.data or []
+            significant_commits=commits_res.data or [],
+            selected_model=selected_model
         )
         return {"shifts": shifts}
 
@@ -186,7 +201,7 @@ async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUs
 
 
 @router.post("/story/{repo_id}")
-async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB):
+async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Generates a narrative development story based on monthly chronological Git aggregation."""
     try:
         repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
@@ -262,9 +277,11 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB):
                 })
             timeline_periods = compressed
 
+        selected_model = payload.model.value if payload else "auto"
         story_text = await generate_development_story(
             repo_name=repo_name,
-            timeline_data={"periods": timeline_periods}
+            timeline_data={"periods": timeline_periods},
+            selected_model=selected_model
         )
         return {"story": story_text}
 

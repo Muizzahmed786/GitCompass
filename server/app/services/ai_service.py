@@ -153,12 +153,24 @@ def select_gemini_model(task_type: str) -> str:
     return settings.GEMINI_FLASH_LITE_MODEL
 
 
-def build_provider_chain(gemini_model: str) -> List[AIProvider]:
-    """Builds the ordered list of fallback providers."""
+def build_provider_chain(gemini_model: str, selected_model: str = "auto") -> List[AIProvider]:
+    """Builds the ordered list of fallback providers based on explicit selection."""
     providers: List[AIProvider] = []
     
+    if selected_model == "groq":
+        if settings.GROQ_API_KEY:
+            providers.append(GroqProvider())
+        return providers
+
+    if selected_model == "gemini_flash":
+        model_to_use = settings.GEMINI_FLASH_MODEL
+    elif selected_model == "gemini_flash_lite":
+        model_to_use = settings.GEMINI_FLASH_LITE_MODEL
+    else:
+        model_to_use = gemini_model
+        
     if settings.GEMINI_API_KEY:
-        providers.append(GeminiProvider(model_name=gemini_model))
+        providers.append(GeminiProvider(model_name=model_to_use))
     
     if settings.GROQ_API_KEY:
         providers.append(GroqProvider())
@@ -170,13 +182,14 @@ async def generate_ai_response(
     task_type: str,
     system_prompt: str,
     user_prompt: str,
-    temperature: float = 0.2
+    temperature: float = 0.2,
+    selected_model: str = "auto"
 ) -> Dict[str, str]:
     """
     Executes the AI request using the task-aware provider fallback chain.
     """
     gemini_model = select_gemini_model(task_type)
-    providers = build_provider_chain(gemini_model)
+    providers = build_provider_chain(gemini_model, selected_model)
     
     if not providers:
         raise AllProvidersFailedError("No AI providers configured or enabled.")
@@ -197,7 +210,7 @@ async def generate_ai_response(
 
 # ── AI Feature Functions ───────────────────────────────────────────────────
 
-async def generate_evolution_summary(repo_name: str, aggregated_data: dict) -> str:
+async def generate_evolution_summary(repo_name: str, aggregated_data: dict, selected_model: str = "auto") -> str:
     """Generates a concise developer-focused summary of the repository from aggregated JSON data."""
     compact_json = json.dumps(aggregated_data, separators=(',', ':'))
 
@@ -231,7 +244,8 @@ CRITICAL RULES:
             task_type="evolution_summary",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.2
+            temperature=0.2,
+            selected_model=selected_model
         )
         return result["text"]
     except AllProvidersFailedError as exc:
@@ -242,7 +256,7 @@ CRITICAL RULES:
         return f"Failed to generate AI summary: {exc}"
 
 
-async def detect_architecture_shifts(repo_name: str, total_commits: int, significant_commits: List[Dict]) -> List[Dict]:
+async def detect_architecture_shifts(repo_name: str, total_commits: int, significant_commits: List[Dict], selected_model: str = "auto") -> List[Dict]:
     """
     Detects major architectural shifts from commit history.
     Limits processing to repositories with <= MAX_COMMITS_FOR_SHIFT_DETECTION.
@@ -282,7 +296,8 @@ If you cannot identify clear architectural shifts from the commit history, retur
             task_type="architecture_shifts",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.1
+            temperature=0.1,
+            selected_model=selected_model
         )
         
         text = result["text"].strip()
@@ -302,11 +317,11 @@ If you cannot identify clear architectural shifts from the commit history, retur
         logger.error(f"Malformed JSON returned by provider: {exc}")
         raise ValueError(f"Failed to parse architecture shifts from AI response: {exc}")
     except Exception as exc:
-        logger.error(f"Failed to detect architecture shifts: {exc}")
-        raise ValueError(f"Failed to detect architecture shifts: {exc}")
+        logger.error(f"Failed to detect architectural shifts: {exc}")
+        raise ValueError(f"Failed to detect architectural shifts: {exc}")
 
 
-async def answer_qa(repo_name: str, question: str, context_summary: str) -> str:
+async def answer_qa(repo_name: str, question: str, context_summary: str, selected_model: str = "auto") -> str:
     """Answers user queries about the repository using context."""
     system_prompt = f"You are a technical assistant for the repository '{repo_name}'."
     
@@ -323,7 +338,8 @@ Keep your answer concise and technical. Use markdown for formatting where it hel
             task_type="qa",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.3
+            temperature=0.3,
+            selected_model=selected_model
         )
         return result["text"]
     except AllProvidersFailedError as exc:
@@ -334,7 +350,7 @@ Keep your answer concise and technical. Use markdown for formatting where it hel
         return f"Failed to answer question: {exc}"
 
 
-async def generate_development_story(repo_name: str, timeline_data: dict) -> str:
+async def generate_development_story(repo_name: str, timeline_data: dict, selected_model: str = "auto") -> str:
     """Generates a non-technical, chronological story retelling how the repository evolved over time."""
     compact_json = json.dumps(timeline_data, separators=(',', ':'))
 
@@ -360,7 +376,8 @@ STRICT RULES:
             task_type="development_story",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            temperature=0.2
+            temperature=0.2,
+            selected_model=selected_model
         )
         return result["text"]
     except AllProvidersFailedError as exc:

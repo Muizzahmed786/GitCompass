@@ -164,3 +164,14 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Trade-offs Accepted:**
   - Container changes require `docker compose up -d --build` when new local modules or dependencies are added to rebuild container image context.
 - **Affected Files / Flow:** [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml), [Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile), [.dockerignore](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/.dockerignore), [redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py).
+
+### [2026-08-13] - Explicit AI Model Selection and Component Layout Constraints
+- **Context / Problem:** Users wanted the ability to explicitly choose which LLM (Gemini Flash, Gemini Flash Lite, Groq Llama 3) powers each individual AI insights card. Additionally, the CSS grid on the analytics page overflowed and pushed content down infinitely due to unconstrained markdown rendering.
+- **Decision:** 
+  1. Exposed model selection explicitly via frontend dropdowns. 
+  2. Implemented strict endpoint payload validation via `AIModelChoice` Enum on the FastAPI routes.
+  3. Preserved fallback semantics by dynamically injecting the requested model into the start of the existing `build_provider_chain` mechanism (Groq fallback remains active for Gemini models).
+  4. Fixed the UI overflow by applying localized `.overflow-y-auto` scroll containers and max-height boundaries onto the child AI React components (`AISummaryCard`, `AIDevelopmentStory`, `ArchitectureTimeline`) rather than hacking the parent Grid layout.
+- **Rationale:** Strict Enum validation (`auto`, `gemini_flash`, `gemini_flash_lite`, `groq`) ensures invalid models never reach the LLM SDK. Constraining the React components internally creates a consistent, scrollable widget interface without breaking the overarching responsive dashboard grid.
+- **Trade-offs Accepted:** The `generate_ai_response` and its parent features (`generate_evolution_summary`, etc.) now pass the `selected_model` parameter all the way down, slightly widening the function signatures.
+- **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/lib/api.js`, `client/src/components/AISummaryCard.jsx`, `client/src/components/AIDevelopmentStory.jsx`.
