@@ -256,9 +256,9 @@ CRITICAL RULES:
         return f"Failed to generate AI summary: {exc}"
 
 
-async def detect_architecture_shifts(repo_name: str, total_commits: int, significant_commits: List[Dict], selected_model: str = "auto") -> List[Dict]:
+async def detect_architecture_shifts(repo_name: str, total_commits: int, structured_phases: List[Dict], selected_model: str = "auto") -> List[Dict]:
     """
-    Detects major architectural shifts from commit history.
+    Detects major architectural shifts from deterministic phases (Stage 6).
     Limits processing to repositories with <= MAX_COMMITS_FOR_SHIFT_DETECTION.
     """
     if total_commits > settings.MAX_COMMITS_FOR_SHIFT_DETECTION:
@@ -267,29 +267,30 @@ async def detect_architecture_shifts(repo_name: str, total_commits: int, signifi
             f"This limit exists to control token usage. You can raise it in config if needed."
         )
 
-    if not significant_commits:
-        raise ValueError("No commits found for this repository.")
+    if not structured_phases:
+        raise ValueError("No architecture phases found for this repository. Ensure it has been fully mined and contains significant events.")
 
-    commits_text = "\n".join(
-        [f"[{c.get('committed_at', '')[:10]}] {c.get('author_name', 'unknown')}: {c.get('message', '')}"
-         for c in significant_commits]
-    )
+    phases_json = json.dumps(structured_phases, indent=2, default=str)
 
     system_prompt = ""
-    user_prompt = f"""You are analyzing the commit history of the repository '{repo_name}'.
+    user_prompt = f"""You are analyzing the architectural evolution of the repository '{repo_name}'.
 
-Commit history:
-{commits_text}
+Instead of raw commits, you are receiving deterministic architectural phases extracted by a static analysis engine. 
+Each phase contains hard evidence (such as framework dependencies added or directories created).
 
-Identify up to 5 significant changes in the project's direction or structure — things like: switching frameworks, major refactors, adding or removing major features, changing the build system, or shifting architectural patterns.
+Phase Data (JSON):
+{phases_json}
+
+Synthesize these deterministic phases into a human-readable timeline of architectural shifts.
+Do NOT invent dates or phases that are not present in the data. You are simply translating the structured JSON into a readable narrative.
 
 Return ONLY a valid JSON array. No markdown, no explanation, no conversational filler.
 Each object must have exactly these keys:
-- "date": "YYYY-MM-DD"
-- "title": short label (max 8 words)
-- "description": one factual sentence about what changed, based only on the commit messages. (IMPORTANT: Properly escape any quotes inside this string).
+- "date": "YYYY-MM-DD" (use the start_date of the phase)
+- "title": short label (max 8 words) (you can use the phase title directly or polish it slightly)
+- "description": one factual sentence explaining what the architectural shift was and what evidence supports it. (IMPORTANT: Properly escape any quotes inside this string).
 
-If you cannot identify clear architectural shifts from the commit history, return an empty array: []
+If you cannot identify clear architectural shifts from the phase data, return an empty array: []
 """
     try:
         result = await generate_ai_response(

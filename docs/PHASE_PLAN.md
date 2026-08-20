@@ -110,14 +110,15 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - The model must unify: `Metadata` + `Structure` + `Technologies` + `Dependencies` + `Code AST` + `Git History`.
 
 ### Stage 5 — Connect Code + Git History
-**Status:** 🔴 High Priority (The Core Differentiator)
+**Status:** ✅ Complete
 **Goal:** Correlate structural code knowledge with temporal Git history.
 - Cross-reference static analysis with commit timelines.
 - Detect architectural events: When was a service introduced? When was a major dependency swapped?
 - Track the lifecycle and evolution of specific APIs or modules over time.
+- **Implementation:** `server/app/services/evolution_analyzer.py`, `server/app/routers/evolution.py`, `server/supabase/migrations/009_evolution_events.sql`
 
 ### Stage 6 — Architecture Evolution Engine
-**Status:** 🟠 Medium Priority
+**Status:** 🔴 High Priority (Next Stage)
 **Goal:** Deterministically group code/git events into a cohesive historical model.
 - Deterministic detection of what changed and when.
 - Group raw temporal changes into logical phases (e.g., "Foundation", "Feature Expansion").

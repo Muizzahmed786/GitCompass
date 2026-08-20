@@ -32,9 +32,12 @@ class AIModelChoice(str, Enum):
 
 class AIRequest(BaseModel):
     model: AIModelChoice = AIModelChoice.auto
+    force_refresh: bool = False
 
 class AISummaryResponse(BaseModel):
-    summary: str
+    summary: str | None = None
+    is_cached: bool = False
+    is_stale: bool = False
 
 class ChatRequest(BaseModel):
     question: str
@@ -47,12 +50,26 @@ class ChatResponse(BaseModel):
 async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Generates AI summary of repository evolution using Gemini."""
     try:
-        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
+        repo_res = db.table("repositories").select("name, total_commits, latest_commit_sha").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
         total_commits = repo_res.data[0].get("total_commits", 0)
+        latest_sha = repo_res.data[0].get("latest_commit_sha") or "unknown"
+
+        selected_model = payload.model.value if payload else "auto"
+        force_refresh = payload.force_refresh if payload else False
+
+        if not force_refresh:
+            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "summary").eq("model", selected_model).execute()
+            if not cache_res.data:
+                return {"summary": None, "is_cached": False, "is_stale": False}
+            
+            cached_content = cache_res.data[0]["content"]
+            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
+            
+            return {"summary": cached_content, "is_cached": True, "is_stale": is_stale}
 
         # Fetch file diffs joined with commits for hotspot aggregation
         hotspots_raw = (
@@ -107,12 +124,21 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
             "hotspots": hotspots
         }
 
-        selected_model = payload.model.value if payload else "auto"
         summary_text = await generate_evolution_summary(
             repo_name=repo_name,
             aggregated_data=aggregated_data,
             selected_model=selected_model
         )
+        
+        # Save to cache
+        db.table("ai_analysis_cache").upsert({
+            "repo_id": repo_id,
+            "analysis_type": "summary",
+            "model": selected_model,
+            "latest_sha": latest_sha,
+            "content": summary_text
+        }, on_conflict="repo_id,analysis_type,model").execute()
+
         return {"summary": summary_text}
 
     except HTTPException:
@@ -126,30 +152,87 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
 async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Detects architecture shifts using Gemini. Limited to repos with <= MAX_COMMITS."""
     try:
-        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
+        repo_res = db.table("repositories").select("name, total_commits, latest_commit_sha").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
         total_commits = repo_res.data[0].get("total_commits") or 0
-
-        # Fetch all commits ordered chronologically — no dependency on summary
-        commits_res = (
-            db.table("commits")
-            .select("author_name, committed_at, message")
-            .eq("repo_id", repo_id)
-            .order("committed_at", desc=False)
-            .limit(200)
-            .execute()
-        )
+        latest_sha = repo_res.data[0].get("latest_commit_sha") or "unknown"
 
         selected_model = payload.model.value if payload else "auto"
+        force_refresh = payload.force_refresh if payload else False
+
+        if not force_refresh:
+            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "shifts").eq("model", selected_model).execute()
+            if not cache_res.data:
+                return {"shifts": None, "is_cached": False, "is_stale": False}
+            
+            cached_content = cache_res.data[0]["content"]
+            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
+            
+            return {"shifts": cached_content, "is_cached": True, "is_stale": is_stale}
+
+        # Fetch deterministic phases and their evidence (Stage 6 -> Stage 7)
+        phases_res = (
+            db.table("architecture_phases")
+            .select("id, title, start_date, end_date, dominant_event_type")
+            .eq("repo_id", repo_id)
+            .order("start_date", desc=False)
+            .execute()
+        )
+        
+        phases = []
+        for phase_row in (phases_res.data or []):
+            phase_id = phase_row["id"]
+            
+            # Fetch events for this phase
+            # Supabase Python client doesn't support deep nested joins easily, so we can fetch all events and filter, or fetch per phase.
+            # Let's fetch the event data using a join
+            events_res = (
+                db.table("architecture_phase_events")
+                .select("event_id, repository_events(event_type, event_key, event_date, metadata)")
+                .eq("phase_id", phase_id)
+                .execute()
+            )
+            
+            evidence = []
+            for ev_row in (events_res.data or []):
+                evt = ev_row.get("repository_events")
+                if evt:
+                    evidence.append({
+                        "type": evt.get("event_type"),
+                        "name": evt.get("event_key"),
+                        "date": evt.get("event_date"),
+                        "metadata": evt.get("metadata")
+                    })
+            
+            phases.append({
+                "phase": {
+                    "title": phase_row["title"],
+                    "start_date": phase_row["start_date"],
+                    "end_date": phase_row["end_date"],
+                    "dominant_event_type": phase_row["dominant_event_type"]
+                },
+                "evidence": evidence
+            })
+
         shifts = await detect_architecture_shifts(
             repo_name=repo_name,
             total_commits=total_commits,
-            significant_commits=commits_res.data or [],
+            structured_phases=phases,
             selected_model=selected_model
         )
+        
+        # Save to cache
+        db.table("ai_analysis_cache").upsert({
+            "repo_id": repo_id,
+            "analysis_type": "shifts",
+            "model": selected_model,
+            "latest_sha": latest_sha,
+            "content": shifts
+        }, on_conflict="repo_id,analysis_type,model").execute()
+
         return {"shifts": shifts}
 
     except HTTPException:
@@ -204,11 +287,25 @@ async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUs
 async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, payload: AIRequest = None):
     """Generates a narrative development story based on monthly chronological Git aggregation."""
     try:
-        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
+        repo_res = db.table("repositories").select("name, total_commits, latest_commit_sha").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
+        latest_sha = repo_res.data[0].get("latest_commit_sha") or "unknown"
+
+        selected_model = payload.model.value if payload else "auto"
+        force_refresh = payload.force_refresh if payload else False
+
+        if not force_refresh:
+            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "story").eq("model", selected_model).execute()
+            if not cache_res.data:
+                return {"story": None, "is_cached": False, "is_stale": False}
+            
+            cached_content = cache_res.data[0]["content"]
+            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
+            
+            return {"story": cached_content, "is_cached": True, "is_stale": is_stale}
 
         # Fetch commits chronologically
         commits_res = (
@@ -277,12 +374,21 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, pay
                 })
             timeline_periods = compressed
 
-        selected_model = payload.model.value if payload else "auto"
         story_text = await generate_development_story(
             repo_name=repo_name,
             timeline_data={"periods": timeline_periods},
             selected_model=selected_model
         )
+        
+        # Save to cache
+        db.table("ai_analysis_cache").upsert({
+            "repo_id": repo_id,
+            "analysis_type": "story",
+            "model": selected_model,
+            "latest_sha": latest_sha,
+            "content": story_text
+        }, on_conflict="repo_id,analysis_type,model").execute()
+
         return {"story": story_text}
 
     except HTTPException:

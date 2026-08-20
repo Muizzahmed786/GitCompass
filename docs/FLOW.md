@@ -28,11 +28,18 @@
 │    ├── routers/                                                        │
 │    │    ├── health.py                                                  │
 │    │    ├── repositories.py                                            │
-│    │    └── analytics.py                                               │
+│    │    ├── analytics.py                                               │
+│    │    ├── ai.py                                                      │
+│    │    └── evolution.py   ───▶ GET /evolution/events, /files/{path}  │
 │    └── services/                                                       │
-│         ├── cloner.py     ───▶ Git subprocess / local clone           │
-│         ├── extractor.py  ───▶ Git log parsing & diff calculation     │
-│         └── miner.py      ───▶ Async Background Worker Task           │
+│         ├── cloner.py             ───▶ Git subprocess / local clone   │
+│         ├── extractor.py          ───▶ Git log parsing & diff calc    │
+│         ├── structure_analyzer.py ───▶ Directory/language detection   │
+│         ├── dependency_analyzer.py───▶ Manifest parsing               │
+│         ├── source_analyzer.py    ───▶ AST / static analysis          │
+│         ├── knowledge_model.py    ───▶ Stage 4 upsert RPC             │
+│         ├── evolution_analyzer.py ───▶ Stage 5 git/code correlation   │
+│         └── miner.py              ───▶ Async Background Worker Task   │
 └──────────────────────────────────┬─────────────────────────────────────┘
                                    │ Database Requests / SQL RPCs
                                    ▼
@@ -40,7 +47,10 @@
 │                        DATABASE (Supabase PostgreSQL)                  │
 │                                                                        │
 │   Tables: profiles | repositories | commits | file_diffs               │
-│   RPC Functions: get_hotspots | get_churn_timeline | get_file_coupling│
+│   Tables: repository_knowledge | repository_dependencies               │
+│   Tables: repository_source_files | repository_events                  │
+│   RPC Functions: get_hotspots | get_churn_timeline | get_file_coupling  │
+│   RPC Functions: replace_knowledge_model                                │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -241,14 +251,15 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Explicit AI Model Selection & Component Layout Fixes
+> **Active Task / Focus Area:** Stage 5 — Code + Git History Correlation
+> **Status:** ✅ Complete
 > **Modified Paths:**
-> - `server/app/routers/ai.py` - AI endpoints accepting `AIModelChoice` in payload
-> - `server/app/services/ai_service.py` - Explicit `selected_model` parameter injected into `build_provider_chain`
-> - `client/src/lib/api.js` - Updated `getAISummary` and `getAIShifts` to accept payload
-> - `client/src/components/AISummaryCard.jsx` - Added model dropdown and internal scroll constraints
-> - `client/src/components/ArchitectureTimeline.jsx` - Added model dropdown
-> - `client/src/components/AIDevelopmentStory.jsx` - Added model dropdown and internal scroll constraints
+> - `server/supabase/migrations/009_evolution_events.sql` — New `repository_events` table with RLS, indexes, and idempotency constraint
+> - `server/app/services/evolution_analyzer.py` — Stage 5 deterministic analyzer: dependency diffing via `git show`, structural directory/manifest introduction detection, large-change outlier detection, conventional commit classification
+> - `server/app/services/miner.py` — Integrated `analyze_evolution()` call after Stage 4, inside isolated `try/except` so Stage 5 failure cannot set repo to `error`
+> - `server/app/routers/evolution.py` — New router: `GET /api/repositories/{repo_id}/evolution/events` and `GET /api/repositories/{repo_id}/evolution/files/{file_path}`
+> - `server/app/main.py` — Registered `evolution.router`
+> - `server/tests/test_evolution_analyzer.py` — Comprehensive unit tests (6 tests passing)
 
 ---
 

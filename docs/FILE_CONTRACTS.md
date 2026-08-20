@@ -387,3 +387,59 @@ Whenever a file is added, modified, or refactored:
 - **Role:** Analytical metric card displaying the strength of observable commit patterns associated with AI-assisted development.
 - **Inputs:** `repoId` prop.
 - **Outputs:** Renders the Signal Score (out of 100 or null handling), confidence level badge, observable signal list, short explanation, and permanent limitation disclaimer.
+
+---
+
+## 🧬 Stage 5 — Evolution Correlation
+
+### [server/app/services/evolution_analyzer.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py)
+- **Role:** Stage 5 deterministic Git/code correlation engine. Produces `repository_events` rows representing historical facts about a repository's evolution.
+- **Inputs:**
+  - `analyze_evolution(repo_id: str, temp_dir: str, commits: List[Dict], file_diffs: List[Dict])`:
+    - `repo_id`: UUID of the repository being analyzed.
+    - `temp_dir`: Path to the cloned Git repository on disk. Required for `git show` and `git ls-tree` calls.
+    - `commits`: List of commit dicts from `extractor.py` (`id`, `sha`, `committed_at`, `message`, `insertions`, `deletions`).
+    - `file_diffs`: List of file diff dicts from `extractor.py` (`commit_id`, `file_path`, `old_path`, `insertions`, `deletions`).
+  - `analyze_dependencies_for_commit(repo_dir, commit, file_diffs)`: Sub-function — takes a single commit and its diffs, returns dependency event dicts.
+  - `get_commit_parents(repo_dir, sha)`: Returns list of parent SHAs from `git log --format=%P`.
+  - `get_file_content_at_commit(repo_dir, sha, file_path)`: Returns file content string via `git show <sha>:<path>`, or `None`.
+  - `directory_exists_at_commit(repo_dir, sha, dir_path)`: Returns `True` if directory existed at given commit via `git ls-tree -d`.
+- **Outputs / Side Effects:**
+  - Writes rows to `repository_events` table via Supabase service-role client.
+  - Uses `upsert(on_conflict="repo_id,commit_id,event_type,event_key")` for idempotency.
+  - No return value.
+- **Event Types Produced:** `dependency_added`, `dependency_removed`, `dependency_version_changed`, `manifest_introduced`, `directory_introduced`, `large_change`, `commit_declared_refactor`.
+- **Error Handling:** Malformed manifests are handled gracefully by returning empty dep lists. All git subprocess failures return `None`/`False`/`[]` without raising.
+
+---
+
+### [server/app/routers/evolution.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/evolution.py)
+- **Role:** FastAPI router exposing Stage 5 deterministic historical events to the frontend.
+- **Prefix:** `/api/repositories/{repo_id}/evolution`
+- **Endpoints:**
+
+  #### `GET /events`
+  - **Inputs:** `repo_id` (path), `limit` (query, default 100, max 1000), `offset` (query, default 0), `Authorization: Bearer <JWT>` header.
+  - **Outputs:** JSON array of `repository_events` rows ordered by `event_date DESC`. Returns raw deterministic evidence — not architectural conclusions.
+  - **Auth:** Requires valid Supabase JWT via `get_current_user` dependency. RLS enforces user isolation at DB level.
+
+  #### `GET /files/{file_path:path}`
+  - **Inputs:** `repo_id` (path), `file_path` (path parameter, supports slashes), `Authorization: Bearer <JWT>` header.
+  - **Outputs:** JSON object containing:
+    - `file_path`, `created_at`, `last_modified`, `total_commits`, `total_insertions`, `total_deletions`
+    - `history`: List of `{sha, committed_at, author_name, message, insertions, deletions, is_rename, old_path}` entries in chronological order.
+  - **Error:** Returns `404` if file is not found in `file_diffs` history.
+
+---
+
+### [server/supabase/migrations/009_evolution_events.sql](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/009_evolution_events.sql)
+- **Role:** Database migration for Stage 5. Creates the `repository_events` table.
+- **Schema Created:**
+  - `repository_events`: `id` (UUID PK), `repo_id` (FK → `repositories`), `commit_id` (nullable FK → `commits`), `event_type` (TEXT), `event_key` (TEXT), `description` (TEXT), `event_date` (TIMESTAMPTZ), `metadata` (JSONB), `created_at` (TIMESTAMPTZ).
+- **Constraints:**
+  - Unique index: `(repo_id, COALESCE(commit_id, '00000000-...'::uuid), event_type, event_key)` — enforces idempotency.
+  - Performance index on `(repo_id, event_date DESC)`.
+  - Performance index on `commit_id`.
+- **RLS:** `SELECT` policy: users can only access events for repositories they own (via `repositories.user_id = auth.uid()`).
+- **No `user_id` column:** Following the pattern established in `008_knowledge_model.sql`, user isolation is achieved via a join to `repositories` rather than denormalizing `user_id` onto this table.
+

@@ -195,3 +195,54 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Rationale:** The Supabase local stack consists of ~10 interconnected microservices (Kong, GoTrue, Studio, Vector, PostgREST, etc.). Managing these manually within our primary `docker-compose.yml` adds immense maintenance overhead. By keeping it separate, our `docker-compose.yml` remains clean (FastAPI + Redis only) while the Supabase CLI handles database resets, migrations, and Auth/API parity with production via `.toml` configuration.
 - **Trade-offs Accepted:** Requires running two independent daemon commands during local development (`supabase start` and `docker compose up`).
 - **Affected Files / Flow:** `server/supabase/config.toml`, `README.md`
+
+---
+
+### [2026-08-21] - Stage 5: git show for Historical Dependency Comparison
+
+- **Context / Problem:** Stage 5 needs to detect `dependency_added`, `dependency_removed`, and `dependency_version_changed` events from Git history. The naive approach would only flag "manifest file was modified" without knowing what actually changed.
+- **Options Considered:**
+  1. Store historical manifest snapshots in the database for comparison.
+  2. Use `git show <commit>:<path>` and `git show <parent>:<path>` within the cloned `temp_dir` to retrieve and parse manifests at each commit.
+- **Decision:** Selected Option 2 (`git show` within `temp_dir`).
+- **Rationale:** Git is the historical source of truth. Storing historical manifest snapshots in the database would duplicate data already in the Git object store, add schema complexity, and create a secondary source of truth. `git show` is deterministic and always accurate. The `temp_dir` is available during Stage 5 execution.
+- **Trade-offs Accepted:** Stage 5 must run before `safe_cleanup_dir(temp_dir)` is called. If `temp_dir` is cleaned up prematurely, `git show` would fail. This is enforced by placement in `miner.py`.
+- **Affected Files / Flow:** [`evolution_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py), [`miner.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/miner.py)
+
+---
+
+### [2026-08-21] - Stage 5: Deterministic event_key for Idempotency
+
+- **Context / Problem:** Stage 5 analysis can be re-run on the same repository (full re-mine or incremental sync overlap). We needed a strategy to prevent duplicate `repository_events` rows.
+- **Options Considered:**
+  1. Use `md5(metadata::text)` as part of the uniqueness constraint. Simple but fragile — JSON key ordering is not guaranteed and would produce different hashes for semantically identical events.
+  2. Add an explicit, deterministic `event_key` column with a composite `UNIQUE(repo_id, commit_id, event_type, event_key)` constraint. Use structured string keys such as `dependency:path:name` or `directory:src/auth`.
+- **Decision:** Selected Option 2 (explicit `event_key` column).
+- **Rationale:** `event_key` produces a stable, human-readable identity for each event that is independent of JSON serialization order. The composite unique index enforces deduplication at the database level. `upsert(..., on_conflict=...)` on the Supabase client handles graceful idempotent writes.
+- **Trade-offs Accepted:** Event key construction must be consistent across runs. If `event_key` construction logic changes in the future, old events will not be de-duplicated against new ones.
+- **Affected Files / Flow:** [`009_evolution_events.sql`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/009_evolution_events.sql), [`evolution_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py)
+
+---
+
+### [2026-08-21] - Stage 5: Mean + 2σ Threshold for large_change Detection
+
+- **Context / Problem:** Stage 5 must classify commits with unusually high churn as `large_change` events. The threshold must be deterministic and repository-relative, not a hardcoded line count.
+- **Options Considered:**
+  1. Hardcoded threshold (e.g., `> 1000 lines`). Simple, but meaningless across repositories of very different sizes.
+  2. 95th-percentile outlier. Percentile requires sorting — accurate but labelled as potential proof of refactoring in the earlier rejected plan.
+  3. Mean + 2 standard deviations (µ + 2σ). Standard statistical outlier detection. Captures the top ~2.3% of commits by churn, relative to the repository's own baseline. Floor of 500 lines prevents false positives on tiny repositories.
+- **Decision:** Selected Option 3 (µ + 2σ with a minimum floor of 500).
+- **Rationale:** µ + 2σ is a widely accepted, self-calibrating outlier rule. It is computed solely from the commits in the analyzed range and carries no interpretive weight — it is a statistical fact, not an architectural conclusion. The floor prevents every commit in a 5-commit repo from being flagged.
+- **Trade-offs Accepted:** If a repository has extremely high variance (e.g., one massive initial commit and then tiny fixes), the threshold will be very high and may miss some genuinely large commits. Stage 6 can apply additional interpretation if needed.
+- **Affected Files / Flow:** [`evolution_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py)
+
+---
+
+### [2026-08-21] - Stage 5: Strict Stage 5 / Stage 6 Boundary
+
+- **Context / Problem:** Early Stage 5 design drafts included logic that would infer architectural intent (e.g., "authentication subsystem introduced", "major refactor detected"). This violates the separation of extraction and reasoning described in `PHASE_PLAN.md`.
+- **Decision:** Stage 5 is strictly limited to deterministic historical facts. Stage 6 remains responsible for interpreting those facts.
+- **Rationale:** Mixing deterministic evidence with AI-inferred interpretation at the extraction layer would make the Repository Knowledge Model unreliable as an input to Stage 7 (AI Reasoning Layer). Facts must be cleanly separated from inferences.
+- **Trade-offs Accepted:** Stage 5 events will appear "raw" to the frontend without high-level labels. This is intentional — Stage 6 will provide those labels from the deterministic evidence.
+- **Affected Files / Flow:** [`evolution_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py), `docs/PHASE_PLAN.md`
+

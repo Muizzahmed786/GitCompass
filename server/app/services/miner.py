@@ -23,6 +23,8 @@ from app.services.structure_analyzer import analyze_repository_structure
 from app.services.dependency_analyzer import analyze_dependencies
 from app.services.source_analyzer import analyze_source_code
 from app.services.knowledge_model import replace_knowledge_model
+from app.services.evolution_analyzer import analyze_evolution
+from app.services.phase_analyzer import analyze_phases
 
 logger = logging.getLogger("gitcompass.miner")
 
@@ -98,6 +100,18 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
             dependencies = analyze_dependencies(temp_dir, structure.manifestFiles)
             source_code = analyze_source_code(temp_dir, structure.sourceFiles)
             replace_knowledge_model(repo_id, latest_commit_sha, structure, dependencies, source_code)
+
+            try:
+                logger.info("Running deterministic evolution analysis (Stage 5)...")
+                analyze_evolution(repo_id, temp_dir, commits, file_diffs)
+            except Exception as e:
+                logger.error("Stage 5 evolution analysis failed for repo %s: %s", repo_id, e, exc_info=True)
+
+            try:
+                logger.info("Running architecture phase analysis (Stage 6)...")
+                analyze_phases(repo_id)
+            except Exception as e:
+                logger.error("Stage 6 phase analysis failed for repo %s: %s", repo_id, e, exc_info=True)
 
         # Step 6: Mark repository as ready
         # Explicit completion ordering: mining_progress = 100 first, then status = "ready"
@@ -185,6 +199,12 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
             dependencies = analyze_dependencies(temp_dir, structure.manifestFiles)
             source_code = analyze_source_code(temp_dir, structure.sourceFiles)
             replace_knowledge_model(repo_id, latest_commit_sha, structure, dependencies, source_code)
+
+            try:
+                logger.info("Running deterministic evolution analysis on sync...")
+                analyze_evolution(repo_id, temp_dir, commits, file_diffs)
+            except Exception as e:
+                logger.error("Stage 5 evolution analysis failed during sync for repo %s: %s", repo_id, e, exc_info=True)
 
         # Step 4: Re-calculate totals and mark ready
         db.table("repositories").update({"mining_progress": 100}).eq("id", repo_id).execute()
