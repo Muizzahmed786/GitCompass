@@ -74,7 +74,7 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 ```
 
 ### Stage 0 — Stabilize Git Analyzer
-**Status:** 🔴 Active / In Progress
+**Status:** ✅ Complete — Tests passing
 **Goal:** Make the existing Git-history pipeline reliable before expanding it.
 - Repository cloning and transient cleanup.
 - Commit traversal and metadata extraction (author, date, message).
@@ -82,14 +82,14 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - Persisting accurate Git history datasets for every repository.
 
 ### Stage 1 — Repository Structure Analyzer
-**Status:** 🔴 High Priority Next Step
+**Status:** ✅ Complete — Tests passing
 **Goal:** Understand what the repository contains before understanding what the code does.
 - Directory scanner to detect languages, frameworks, and build tools.
 - Identify core structural components: source directories, test directories, configuration files, CI/CD files.
 - Output: A high-level structural map (e.g., "Java, Spring Boot, 3 Modules").
 
 ### Stage 2 — Dependency & Configuration Analyzer
-**Status:** 🔴 High Priority
+**Status:** ✅ Complete — Tests passing
 **Goal:** Understand the technology stack and external dependencies.
 - Parse package managers (`package.json`, `pom.xml`, `requirements.txt`, etc.).
 - Extract frameworks, libraries, databases, and cloud services.
@@ -97,14 +97,14 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - **Security Constraint:** Strictly redact/exclude secrets, tokens, and `.env` values from the knowledge model.
 
 ### Stage 3 — Source-Code Analyzer
-**Status:** 🔴 High Priority
+**Status:** ✅ Complete — Tests passing
 **Goal:** Extract the actual structure of the code using static analysis/AST parsing.
 - Extract file-level structures (imports, classes, functions, exports).
 - Map class relationships (methods, fields, inheritance, dependencies).
 - Detect API surfaces (REST routes, RPC endpoints).
 
 ### Stage 4 — Build the Repository Knowledge Model
-**Status:** 🔴 High Priority Architecture Goal
+**Status:** ✅ Complete — Tests passing
 **Goal:** Create the centralized "Brain" of GitCompass.
 - Aggregate outputs from Stages 0, 1, 2, and 3 into a single cohesive internal representation.
 - The model must unify: `Metadata` + `Structure` + `Technologies` + `Dependencies` + `Code AST` + `Git History`.
@@ -118,15 +118,16 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - **Implementation:** `server/app/services/evolution_analyzer.py`, `server/app/routers/evolution.py`, `server/supabase/migrations/009_evolution_events.sql`
 
 ### Stage 6 — Architecture Evolution Engine
-**Status:** 🔴 High Priority (Next Stage)
+**Status:** ✅ Complete — Tests passing
 **Goal:** Deterministically group code/git events into a cohesive historical model.
 - Deterministic detection of what changed and when.
 - Group raw temporal changes into logical phases (e.g., "Foundation", "Feature Expansion").
 - Identify candidate architectural events.
 - Collect hard, deterministic evidence for each event (e.g., "File X deleted, Module Y created").
+- **Implementation:** `server/app/services/phase_analyzer.py`, `server/supabase/migrations/011_architecture_phases.sql`
 
 ### Stage 7 — AI Reasoning Layer
-**Status:** 🟠 Medium Priority
+**Status:** 🔴 High Priority (Next Stage)
 **Goal:** Introduce the LLM as a reasoning engine over the structured Evolution Model.
 - Feed the deterministic evidence and Repository Knowledge Model to the LLM.
 - Infer likely motivations behind the collected evidence.

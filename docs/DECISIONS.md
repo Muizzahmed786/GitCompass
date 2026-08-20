@@ -246,3 +246,58 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Trade-offs Accepted:** Stage 5 events will appear "raw" to the frontend without high-level labels. This is intentional — Stage 6 will provide those labels from the deterministic evidence.
 - **Affected Files / Flow:** [`evolution_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evolution_analyzer.py), `docs/PHASE_PLAN.md`
 
+---
+
+### [2026-08-21] - Stage 6: Time-Gap Clustering for Phase Grouping
+
+- **Context / Problem:** Stage 6 must group raw `repository_events` from Stage 5 into coherent architectural phases without any LLM involvement. We needed a deterministic, configurable algorithm that produces stable groupings regardless of how many times it runs.
+- **Options Considered:**
+  1. **Fixed number of phases (k-means):** Partition events into a fixed `k` number of groups. But k is not known in advance per repository and the algorithm introduces non-determinism from seed initialization.
+  2. **Commit-message clustering:** Group events by keywords in commit messages. Fragile, depends on developer conventions, and violates the determinism constraint.
+  3. **Time-gap clustering with configurable threshold (`PHASE_GAP_DAYS`):** Sort significant events chronologically; start a new phase when the gap between consecutive significant events exceeds the threshold. Fully deterministic, configurable, and self-calibrating.
+- **Decision:** Selected Option 3 (time-gap clustering with `PHASE_GAP_DAYS = 14`).
+- **Rationale:** The 14-day rule is based on typical sprint/release cadence. It is self-calibrating, configurable via one constant, and produces zero ambiguity on ties (gap ≤ 14 days = same phase; gap > 14 days = new phase).
+- **Trade-offs Accepted:** A repository with continuous daily commits will produce a single large phase. This is intentional — no architectural boundary has occurred. The threshold can be tuned via `PHASE_GAP_DAYS`.
+- **Affected Files / Flow:** [`phase_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/phase_analyzer.py)
+
+---
+
+### [2026-08-21] - Stage 6: Deterministic Title Generation Without LLM
+
+- **Context / Problem:** Each architectural phase needs a human-readable title (e.g., "FastAPI Backend Foundation"). Using an LLM would violate the Stage 6 determinism constraint and introduce latency/cost during the mining pipeline.
+- **Options Considered:**
+  1. Use the LLM to generate a title for each phase. Violates the core constraint — no LLM in Stage 6.
+  2. Use only the dominant event type as the title. Too generic and not useful.
+  3. A priority-ordered heuristic rule set: (1) recognized framework/dependency name, (2) recognized technology, (3) dominant directory, (4) dominant event type, (5) generic fallback.
+- **Decision:** Selected Option 3 (priority-ordered heuristic rule set).
+- **Rationale:** The title generator runs in microseconds with zero external dependencies. It is fully reproducible — identical events always produce identical titles. The vocabulary is intentionally limited and explicit, avoiding hallucination risk.
+- **Trade-offs Accepted:** The vocabulary is bounded. Frameworks not in the heuristic set fall through to the directory or generic title. The vocabulary can be expanded incrementally.
+- **Affected Files / Flow:** [`phase_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/phase_analyzer.py) → `generate_phase_title()`
+
+---
+
+### [2026-08-21] - Stage 6: Idempotency via Delete-Before-Insert
+
+- **Context / Problem:** `analyze_phases(repo_id)` is invoked each time a repository is mined. Naively appending new phases would accumulate duplicates.
+- **Options Considered:**
+  1. Upsert on `(repo_id, phase_index)`. Risky — if the number of phases changes between runs, stale phases from prior runs remain.
+  2. Delete all existing `architecture_phases` for the repo before inserting. Clean slate combined with cascading FKs on `architecture_phase_events` atomically removes all stale evidence mappings.
+- **Decision:** Selected Option 2 (delete-before-insert with cascading FK cleanup).
+- **Rationale:** A single `DELETE WHERE repo_id = ...` atomically purges all stale phase/evidence data via cascade. Simpler and safer than upsert logic handling variable-length phase arrays.
+- **Trade-offs Accepted:** Brief window between delete and insert where no phases exist. Invisible to end users since reads go through the REST API, not the mining worker.
+- **Affected Files / Flow:** [`phase_analyzer.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/phase_analyzer.py) → `analyze_phases()`, [`011_architecture_phases.sql`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/011_architecture_phases.sql)
+
+---
+
+### [2026-08-21] - Stage 7: `/shifts` Now Consumes Deterministic Phase Evidence
+
+- **Context / Problem:** The previous `/shifts` endpoint fed up to 200 raw commit messages to the LLM and asked it to infer architectural phases. The LLM was determining phase boundaries — a Stage 6 responsibility — and was prone to hallucinating dates or conflating unrelated changes.
+- **Options Considered:**
+  1. Keep feeding raw commits with a stronger system prompt. Unreliable — the LLM cannot ignore raw commits even if instructed.
+  2. Feed deterministic Stage 6 phase data (titles, dates, dominant event type, evidence events) to the LLM and ask it only to synthesize a human-readable narrative.
+- **Decision:** Selected Option 2 (LLM receives deterministic phase JSON as input).
+- **Rationale:** Enforces the GitCompass principle: Stage 6 answers *what happened and when*; Stage 7 answers *what it means*. The LLM cannot hallucinate phase boundaries because they are provided as structured JSON facts.
+- **Trade-offs Accepted:** If a repository has zero `architecture_phases` (mined before Stage 6 was run), `/shifts` returns an error prompting re-mining.
+- **Affected Files / Flow:** [`routers/ai.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py), [`services/ai_service.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py)
+
+

@@ -39,6 +39,7 @@
 │         ├── source_analyzer.py    ───▶ AST / static analysis          │
 │         ├── knowledge_model.py    ───▶ Stage 4 upsert RPC             │
 │         ├── evolution_analyzer.py ───▶ Stage 5 git/code correlation   │
+│         ├── phase_analyzer.py     ───▶ Stage 6 deterministic phases   │
 │         └── miner.py              ───▶ Async Background Worker Task   │
 └──────────────────────────────────┬─────────────────────────────────────┘
                                    │ Database Requests / SQL RPCs
@@ -49,6 +50,7 @@
 │   Tables: profiles | repositories | commits | file_diffs               │
 │   Tables: repository_knowledge | repository_dependencies               │
 │   Tables: repository_source_files | repository_events                  │
+│   Tables: architecture_phases | architecture_phase_events              │
 │   RPC Functions: get_hotspots | get_churn_timeline | get_file_coupling  │
 │   RPC Functions: replace_knowledge_model                                │
 └────────────────────────────────────────────────────────────────────────┘
@@ -225,8 +227,8 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 1. **Frontend Request:** Components (e.g. `AISummaryCard`, `ArchitectureTimeline`, `QAChatAssistant`) send requests to `/api/ai/*` via `api.js`.
 2. **Backend Router:** `ai.py` handles the request. It checks `ai_analysis_cache` using the latest commit SHA.
 3. **Cache Logic:** If a valid cache exists, return it. Otherwise, invoke `ai_service.py`.
-4. **AI Processing:** `ai_service.py` fetches necessary context from DB, checks the 500-commit limit for shift detection, and calls the Gemini API.
-5. **Cache & Respond:** The response is cached in Supabase and returned to the frontend.
+4. **AI Processing (Architecture Shifts):** `ai.py` fetches `architecture_phases` and `architecture_phase_events` (Stage 6 output) and constructs a structured JSON evidence payload. `ai_service.detect_architecture_shifts()` sends this to Gemini, which synthesizes a narrative.
+5. **Cache & Respond:** The response is cached in `ai_analysis_cache` and returned to the frontend.
 
 ---
 
@@ -251,15 +253,16 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Stage 5 — Code + Git History Correlation
+> **Active Task / Focus Area:** Stage 6 — Architecture Evolution Engine
 > **Status:** ✅ Complete
 > **Modified Paths:**
-> - `server/supabase/migrations/009_evolution_events.sql` — New `repository_events` table with RLS, indexes, and idempotency constraint
-> - `server/app/services/evolution_analyzer.py` — Stage 5 deterministic analyzer: dependency diffing via `git show`, structural directory/manifest introduction detection, large-change outlier detection, conventional commit classification
-> - `server/app/services/miner.py` — Integrated `analyze_evolution()` call after Stage 4, inside isolated `try/except` so Stage 5 failure cannot set repo to `error`
-> - `server/app/routers/evolution.py` — New router: `GET /api/repositories/{repo_id}/evolution/events` and `GET /api/repositories/{repo_id}/evolution/files/{file_path}`
-> - `server/app/main.py` — Registered `evolution.router`
-> - `server/tests/test_evolution_analyzer.py` — Comprehensive unit tests (6 tests passing)
+> - `server/supabase/migrations/011_architecture_phases.sql` — New `architecture_phases` table (phase metadata) and `architecture_phase_events` table (evidence mapping), with RLS and cascading FKs
+> - `server/app/services/phase_analyzer.py` — Stage 6 deterministic engine: `PHASE_GAP_DAYS=14` threshold, time-gap clustering, priority heuristic title generation, idempotent `analyze_phases()` entry point
+> - `server/app/services/miner.py` — Added `analyze_phases(repo_id)` call immediately after Stage 5 (`analyze_evolution`), inside isolated `try/except` block so Stage 6 failure cannot set repo to `error`
+> - `server/app/routers/ai.py` — Refactored `/shifts` endpoint to fetch `architecture_phases` + `architecture_phase_events` instead of raw `commits`; feeds structured evidence JSON to Stage 7 LLM
+> - `server/app/services/ai_service.py` — Updated `detect_architecture_shifts()` signature and prompt: now accepts `structured_phases: List[Dict]` instead of raw commits
+> - `server/tests/test_phase_analyzer.py` — Unit tests for clustering boundaries, deterministic titles, empty input, irrelevant event filtering (6 tests passing)
+> - `server/tests/test_miner.py` — Added `analyze_phases` to mock decorator chain for Stage 5 failure isolation test
 
 ---
 

@@ -443,3 +443,68 @@ Whenever a file is added, modified, or refactored:
 - **RLS:** `SELECT` policy: users can only access events for repositories they own (via `repositories.user_id = auth.uid()`).
 - **No `user_id` column:** Following the pattern established in `008_knowledge_model.sql`, user isolation is achieved via a join to `repositories` rather than denormalizing `user_id` onto this table.
 
+---
+
+## 🏗 Stage 6 — Architecture Evolution Engine
+
+### [server/app/services/phase_analyzer.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/phase_analyzer.py)
+- **Role:** Stage 6 deterministic phase-clustering engine. Converts raw `repository_events` from Stage 5 into structured, evidence-backed `architecture_phases`.
+- **Constants:**
+  - `PHASE_GAP_DAYS = 14` — Configurable inactivity threshold for phase boundary detection.
+  - `SIGNIFICANT_EVENT_TYPES` — Set of event types considered architecturally significant: `directory_introduced`, `dependency_added`, `dependency_removed`, `dependency_version_changed`, `manifest_introduced`, `large_change`, `commit_declared_refactor`.
+- **Public Entry Point:**
+  - `analyze_phases(repo_id: str)` — Loads events, clusters, titles, and persists phases. Idempotent.
+- **Internal Functions:**
+  - `is_significant_event(event: Dict) -> bool` — Returns `True` if `event["event_type"]` is in `SIGNIFICANT_EVENT_TYPES`.
+  - `calculate_days_gap(date1: datetime, date2: datetime) -> float` — Returns absolute gap in days between two datetimes.
+  - `cluster_events_into_phases(events: List[Dict]) -> List[List[Dict]]` — Pure function (no DB access). Sorts events chronologically, filters to significant only, splits on gaps > `PHASE_GAP_DAYS`. Returns list of phase buckets.
+  - `calculate_phase_metadata(phase_events: List[Dict], phase_index: int) -> Dict` — Returns `{phase_index, start_date, end_date, title, dominant_event_type, event_count}`.
+  - `generate_phase_title(phase_events: List[Dict], phase_index: int) -> str` — Deterministic title using priority rule set: (1) recognized framework dependency, (2) recognized technology, (3) dominant directory, (4) dominant event type, (5) generic `"Repository Evolution Phase N"`.
+- **Outputs / Side Effects:**
+  - Deletes all existing `architecture_phases` for `repo_id` (cascades to `architecture_phase_events`).
+  - Inserts new `architecture_phases` rows.
+  - Inserts `architecture_phase_events` rows mapping each phase to its source `repository_events`.
+  - No return value.
+- **Error Handling:** Raises on database errors after logging. Caller (`miner.py`) catches and logs without crashing the overall mining pipeline.
+
+---
+
+### [server/supabase/migrations/011_architecture_phases.sql](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/011_architecture_phases.sql)
+- **Role:** Database migration for Stage 6. Creates the `architecture_phases` and `architecture_phase_events` tables.
+- **Schema Created:**
+  - `architecture_phases`: `id` (UUID PK), `repo_id` (FK → `repositories` ON DELETE CASCADE), `phase_index` (INTEGER), `start_date` (TIMESTAMPTZ), `end_date` (TIMESTAMPTZ), `title` (TEXT), `dominant_event_type` (TEXT), `event_count` (INTEGER), `created_at` (TIMESTAMPTZ).
+  - `architecture_phase_events`: `phase_id` (FK → `architecture_phases` ON DELETE CASCADE), `event_id` (FK → `repository_events` ON DELETE CASCADE), composite PK `(phase_id, event_id)`.
+- **Constraints:**
+  - Unique index: `(repo_id, phase_index)` — enforces ordered, non-duplicate phase numbering per repository.
+- **RLS:**
+  - `architecture_phases`: `SELECT` policy — users access only phases for repositories they own.
+  - `architecture_phase_events`: `SELECT` policy — users access only evidence for phases they own (join through `architecture_phases → repositories`).
+- **Cascade behavior:** Deleting a repository cascades to phases; deleting a phase cascades to its evidence mappings.
+
+---
+
+### Stage 6 → Stage 7 Data Contract (via `routers/ai.py` `/shifts` endpoint)
+
+- **What Stage 6 provides to Stage 7:**
+  - `architecture_phases`: `{title, start_date, end_date, dominant_event_type}` per phase.
+  - `architecture_phase_events JOIN repository_events`: `{event_type, event_key, event_date, metadata}` per evidence item.
+- **Format delivered to LLM (via `ai_service.detect_architecture_shifts`):**
+  ```json
+  [
+    {
+      "phase": {
+        "title": "FastAPI Backend Foundation",
+        "start_date": "2026-01-20T00:00:00Z",
+        "end_date": "2026-01-20T00:00:00Z",
+        "dominant_event_type": "dependency_added"
+      },
+      "evidence": [
+        {"type": "dependency_added", "name": "dependency:requirements.txt:fastapi", "date": "...", "metadata": {...}},
+        {"type": "directory_introduced", "name": "directory:server/app", "date": "...", "metadata": {...}}
+      ]
+    }
+  ]
+  ```
+- **LLM's role:** Synthesize phases into a readable narrative. LLM does NOT determine phase boundaries.
+
+
