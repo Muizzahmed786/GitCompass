@@ -19,6 +19,10 @@ from typing import List, Any, Optional
 from app.database import get_service_client
 from app.services.cloner import clone_repository, parse_github_url, safe_cleanup_dir
 from app.services.extractor import extract_git_history
+from app.services.structure_analyzer import analyze_repository_structure
+from app.services.dependency_analyzer import analyze_dependencies
+from app.services.source_analyzer import analyze_source_code
+from app.services.knowledge_model import replace_knowledge_model
 
 logger = logging.getLogger("gitcompass.miner")
 
@@ -87,6 +91,13 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
 
         logger.info("Writing %d file diffs to database...", len(file_diffs))
         batch_insert("file_diffs", file_diffs)
+        
+        if latest_commit_sha:
+            logger.info("Running deterministic analyzers for Knowledge Model...")
+            structure = analyze_repository_structure(temp_dir)
+            dependencies = analyze_dependencies(temp_dir, structure.manifestFiles)
+            source_code = analyze_source_code(temp_dir, structure.sourceFiles)
+            replace_knowledge_model(repo_id, latest_commit_sha, structure, dependencies, source_code)
 
         # Step 6: Mark repository as ready
         # Explicit completion ordering: mining_progress = 100 first, then status = "ready"
@@ -167,6 +178,13 @@ def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
             logger.info("Writing %d new delta commits to database for repo %s...", len(commits), repo_id)
             batch_insert("commits", commits)
             batch_insert("file_diffs", file_diffs)
+            
+        if latest_commit_sha and latest_commit_sha != since_sha:
+            logger.info("Running deterministic analyzers for Knowledge Model on sync...")
+            structure = analyze_repository_structure(temp_dir)
+            dependencies = analyze_dependencies(temp_dir, structure.manifestFiles)
+            source_code = analyze_source_code(temp_dir, structure.sourceFiles)
+            replace_knowledge_model(repo_id, latest_commit_sha, structure, dependencies, source_code)
 
         # Step 4: Re-calculate totals and mark ready
         db.table("repositories").update({"mining_progress": 100}).eq("id", repo_id).execute()

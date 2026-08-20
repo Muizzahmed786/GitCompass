@@ -15,6 +15,7 @@ Two separate clients for two separate trust levels:
 """
 
 from supabase import create_client, Client
+# pyrefly: ignore [missing-import]
 from supabase.lib.client_options import ClientOptions
 
 from app.config import settings

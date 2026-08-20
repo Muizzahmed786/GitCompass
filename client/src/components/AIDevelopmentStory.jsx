@@ -7,6 +7,7 @@ export default function AIDevelopmentStory({ repoId }) {
   const [loading, setLoading] = useState(false); // Default to false
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('auto');
 
   const fetchStory = useCallback(async () => {
     if (loading) return; // Prevent concurrent requests
@@ -14,7 +15,7 @@ export default function AIDevelopmentStory({ repoId }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.post(`/api/ai/story/${repoId}`);
+      const data = await api.post(`/api/ai/story/${repoId}`, { model: selectedModel });
       setStory(data.story);
     } catch (err) {
       setError(err.message || "Failed to generate development story");
@@ -33,9 +34,9 @@ export default function AIDevelopmentStory({ repoId }) {
   };
 
   return (
-    <div className="bg-surface rounded-xl shadow-sm border border-divider p-6 h-full flex flex-col">
+    <div className="bg-surface rounded-xl shadow-sm border border-divider h-full flex flex-col min-h-[400px]">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-transparent">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -51,6 +52,16 @@ export default function AIDevelopmentStory({ repoId }) {
         <div className="flex items-center gap-2">
           {story && !loading && (
             <>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-xs border-none bg-surface-hover rounded-md text-text-secondary focus:ring-0 cursor-pointer py-1 pl-2 pr-6"
+              >
+                <option value="auto">Auto</option>
+                <option value="gemini_flash">Gemini Flash</option>
+                <option value="gemini_flash_lite">Flash Lite</option>
+                <option value="groq">Groq</option>
+              </select>
               <button
                 onClick={handleCopy}
                 title="Copy Story"
@@ -82,7 +93,7 @@ export default function AIDevelopmentStory({ repoId }) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col justify-center">
+      <div className={`flex-1 flex flex-col overflow-y-auto px-6 pb-6 pt-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-text-tertiary [&::-webkit-scrollbar-track]:bg-transparent ${!story ? 'justify-center' : 'justify-start'}`}>
         {loading ? (
           <div className="space-y-3 animate-pulse py-4">
             <div className="h-4 bg-surface-hover rounded w-3/4"></div>
@@ -117,6 +128,19 @@ export default function AIDevelopmentStory({ repoId }) {
             <p className="text-sm text-text-tertiary mb-6 max-w-sm">
               Use AI to summarize the repository's commit history into a readable, chronological development story.
             </p>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs text-text-tertiary">Model:</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-xs border border-divider bg-surface rounded-md text-text-secondary focus:ring-indigo-500 cursor-pointer py-1.5 pl-3 pr-8"
+              >
+                <option value="auto">Auto (Recommended)</option>
+                <option value="gemini_flash">Gemini Flash</option>
+                <option value="gemini_flash_lite">Gemini Flash Lite</option>
+                <option value="groq">Groq Llama 3</option>
+              </select>
+            </div>
             <button
               onClick={fetchStory}
               disabled={loading}

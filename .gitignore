@@ -12,6 +12,9 @@ ENV/
 env/
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
 .coverage
 htmlcov/
 
@@ -29,10 +32,8 @@ lerna-debug.log*
 
 # ── Environment Variables & Secrets ────────
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 server/.env
 client/.env
 
@@ -50,3 +51,12 @@ desktop.ini
 /tmp/
 temp/
 *.tmp
+
+# ── Local Databases & Supabase ──────────
+.supabase/
+*.sqlite
+*.sqlite3
+*.db
+
+# ── Docker ─────────────────────────────────
+docker-compose.override.yml

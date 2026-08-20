@@ -57,6 +57,38 @@ Whenever a file is added, modified, or refactored:
 
 ---
 
+### [server/app/core/redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py)
+- **Role:** Centralized Redis client instance provider.
+- **Inputs:**
+  - Docker DNS network target host: `"redis"`
+  - TCP Port: `6379`
+  - Client parameter: `decode_responses=True`
+- **Outputs / Returns:**
+  - `redis_client`: Initialized `redis.Redis` client instance for executing key-value, caching, and ping commands (`redis_client.ping()`).
+
+---
+
+### [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml)
+- **Role:** Multi-container Docker orchestration for GitCompass.
+- **Inputs:**
+  - Service `server`: Docker context `./server`, environment file `./server/.env`, port forwarding `8000:8000`, dependency `redis`.
+  - Service `redis`: Image `redis:7-alpine`, container `gitcompass-redis`, port forwarding `6379:6379`.
+- **Outputs / Returns:**
+  - Running container stack with networked FastAPI backend (`gitcompass-server`) and Redis server (`gitcompass-redis`).
+
+---
+
+### [server/Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile)
+- **Role:** Docker image build manifest for FastAPI application.
+- **Inputs:**
+  - Base image: `python:3.13-slim`
+  - Dependencies: `requirements.txt`
+  - Source context: `server/` (filtered by `.dockerignore`)
+- **Outputs / Returns:**
+  - Built image `gitcompass-server:latest` exposing port 8000 with entrypoint `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
+
+---
+
 ## 🌐 Backend — API Routers
 
 ### [server/app/routers/health.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/health.py)
@@ -182,6 +214,13 @@ Whenever a file is added, modified, or refactored:
 - **Role:** Adds `commit_type` column to `commits` table and indexing for conventional commit analytics.
 - **Inputs:** Migration run.
 - **Outputs:** `commits.commit_type` column added with composite index on `(repo_id, commit_type)`.
+
+---
+
+### [server/supabase/migrations/007_api_role_grants.sql](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/007_api_role_grants.sql)
+- **Role:** Explicitly grants `SELECT, INSERT, UPDATE, DELETE` privileges to the `authenticated` and `service_role` roles for all tables in the `public` schema.
+- **Inputs:** Migration run.
+- **Outputs:** Modifies Postgres ACLs and `pg_default_acl` to ensure the local Supabase API can perform DML operations.
 
 ---
 
@@ -320,19 +359,19 @@ Whenever a file is added, modified, or refactored:
 - **Outputs:** Generated text (summaries, chat answers) or structured JSON (architectural shifts) directly from the LLM, tightly formatted without assessment fillers.
 
 ### [server/app/routers/ai.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py)
-- **Role:** API endpoints exposing AI services with built-in caching.
-- **Inputs:** `repo_id`, JWT token, and optionally a JSON payload for chat questions (`question`).
-- **Outputs:** JSON responses containing `summary`, `shifts`, or `answer`. Handles cache hits/misses.
+- **Role:** API endpoints exposing AI services with built-in caching and explicit model routing.
+- **Inputs:** `repo_id`, JWT token, and optionally a JSON payload (`AIRequest`) specifying `model` (e.g. `auto`, `gemini_flash`, `groq`). Chat also takes `question`.
+- **Outputs:** JSON responses containing `summary`, `shifts`, or `answer`. Handles cache hits/misses. Returns 422 for invalid model choices.
 
 ### [client/src/components/AISummaryCard.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AISummaryCard.jsx)
 - **Role:** UI to display the 3-paragraph executive evolution summary.
-- **Inputs:** `repoId` prop.
-- **Outputs:** Renders the text summary using `react-markdown`, loading skeleton, copy button, and retry/refresh controls.
+- **Inputs:** `repoId` prop. User dropdown selection for AI Model.
+- **Outputs:** Renders the text summary using `react-markdown` inside a constrained scrollable container, loading skeleton, copy button, and retry/refresh controls.
 
 ### [client/src/components/ArchitectureTimeline.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/ArchitectureTimeline.jsx)
 - **Role:** UI to display chronologically mapped architectural shifts.
-- **Inputs:** `repoId` prop.
-- **Outputs:** Renders a vertical timeline of JSON-derived architecture shifts using `react-markdown`, error alerts (e.g. if commits > 500), copy, and refresh controls.
+- **Inputs:** `repoId` prop. User dropdown selection for AI Model.
+- **Outputs:** Renders a vertical timeline of JSON-derived architecture shifts using `react-markdown` inside a constrained scrollable container, error alerts, copy, and refresh controls.
 
 ### [client/src/components/QAChatAssistant.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/QAChatAssistant.jsx)
 - **Role:** Interactive ephemeral chat widget for querying repository architecture.
@@ -341,8 +380,8 @@ Whenever a file is added, modified, or refactored:
 
 ### [client/src/components/AIDevelopmentStory.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIDevelopmentStory.jsx)
 - **Role:** UI component that renders a short, narrative retelling of how the repository evolved over time.
-- **Inputs:** `repoId` prop.
-- **Outputs:** Renders a non-technical, chronological story using `react-markdown` with copy and reload controls.
+- **Inputs:** `repoId` prop. User dropdown selection for AI Model.
+- **Outputs:** Renders a non-technical, chronological story using `react-markdown` inside a constrained scrollable container with copy and reload controls.
 
 ### [client/src/components/AIAssistanceSignal.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/components/AIAssistanceSignal.jsx)
 - **Role:** Analytical metric card displaying the strength of observable commit patterns associated with AI-assisted development.

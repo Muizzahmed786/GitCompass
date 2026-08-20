@@ -10,6 +10,7 @@ The main dependency chain for protected routes:
 
 from typing import Annotated
 
+# pyrefly: ignore [missing-import]
 from fastapi import Depends, HTTPException, Request, status
 
 from app.database import get_user_client

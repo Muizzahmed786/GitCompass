@@ -34,12 +34,13 @@ export default function ArchitectureTimeline({ repoId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [generated, setGenerated] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('auto');
 
   const fetchShifts = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getAIShifts(repoId);
+      const data = await api.getAIShifts(repoId, { model: selectedModel });
       setShifts(data.shifts || []);
       setGenerated(true);
     } catch (err) {
@@ -59,7 +60,17 @@ export default function ArchitectureTimeline({ repoId }) {
           Architecture Shift Timeline
         </h3>
         {(generated || !!error) && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="text-xs border-none bg-surface-hover rounded-md text-text-secondary focus:ring-0 cursor-pointer py-1 pl-2 pr-6"
+            >
+              <option value="auto">Auto</option>
+              <option value="gemini_flash">Gemini Flash</option>
+              <option value="gemini_flash_lite">Flash Lite</option>
+              <option value="groq">Groq</option>
+            </select>
             {shifts.length > 0 && <CopyButton text={shifts} />}
             <button
               onClick={fetchShifts}
@@ -108,6 +119,19 @@ export default function ArchitectureTimeline({ repoId }) {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-text-tertiary">Model:</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-xs border border-divider bg-surface rounded-md text-text-secondary focus:ring-primary-500 cursor-pointer py-1.5 pl-3 pr-8"
+              >
+                <option value="auto">Auto (Recommended)</option>
+                <option value="gemini_flash">Gemini Flash</option>
+                <option value="gemini_flash_lite">Gemini Flash Lite</option>
+                <option value="groq">Groq Llama 3</option>
+              </select>
+            </div>
             <button
               onClick={fetchShifts}
               disabled={loading}

@@ -149,3 +149,49 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
   3. Converted `QAChatAssistant` from an inline card into a global floating chatbot widget with fixed bottom-right positioning (`position: fixed`).
 - **Rationale:** Minimizes token usage via Python-side metric pre-calculation and monthly aggregation. Ensures AI cannot hallucinate non-existent phases or claim absolute proof of AI authorship. Moving chat to a FAB optimizes screen real estate.
 - **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/components/AIDevelopmentStory.jsx`, `client/src/components/AIAssistanceSignal.jsx`, `client/src/components/QAChatAssistant.jsx`, `client/src/pages/RepositoryAnalytics.jsx`.
+
+### [2026-08-12] - Docker Containerization & Redis Infrastructure Setup
+- **Context / Problem:** Needed a robust caching & task queue infrastructure for GitCompass. Installing Redis locally on host machines introduces environment dependencies and setup friction.
+- **Options Considered:**
+  1. Local Redis installation on host OS / WSL2 directly.
+  2. Docker Compose containerization for FastAPI (`server`) and Redis (`redis:7-alpine`).
+- **Decision:** Selected Option 2 (Docker Compose containerization).
+- **Rationale:**
+  - Docker Compose provides reproducible, isolated development and production environments across platforms.
+  - The FastAPI server container connects to Redis seamlessly using Docker network service name `redis:6379`.
+  - `.dockerignore` optimizes build context from ~57.54 MB to ~3.19 kB by excluding `.env`, `.venv`, `.git`, `__pycache__`, etc.
+  - Secrets are securely injected into containers at runtime via `env_file` (`server/.env`).
+- **Trade-offs Accepted:**
+  - Container changes require `docker compose up -d --build` when new local modules or dependencies are added to rebuild container image context.
+- **Affected Files / Flow:** [docker-compose.yml](file:///c:/Users/mulla/Desktop/Projects/GitCompass/docker-compose.yml), [Dockerfile](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/Dockerfile), [.dockerignore](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/.dockerignore), [redis.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/core/redis.py).
+
+### [2026-08-13] - Explicit AI Model Selection and Component Layout Constraints
+- **Context / Problem:** Users wanted the ability to explicitly choose which LLM (Gemini Flash, Gemini Flash Lite, Groq Llama 3) powers each individual AI insights card. Additionally, the CSS grid on the analytics page overflowed and pushed content down infinitely due to unconstrained markdown rendering.
+- **Decision:** 
+  1. Exposed model selection explicitly via frontend dropdowns. 
+  2. Implemented strict endpoint payload validation via `AIModelChoice` Enum on the FastAPI routes.
+  3. Preserved fallback semantics by dynamically injecting the requested model into the start of the existing `build_provider_chain` mechanism (Groq fallback remains active for Gemini models).
+  4. Fixed the UI overflow by applying localized `.overflow-y-auto` scroll containers and max-height boundaries onto the child AI React components (`AISummaryCard`, `AIDevelopmentStory`, `ArchitectureTimeline`) rather than hacking the parent Grid layout.
+- **Rationale:** Strict Enum validation (`auto`, `gemini_flash`, `gemini_flash_lite`, `groq`) ensures invalid models never reach the LLM SDK. Constraining the React components internally creates a consistent, scrollable widget interface without breaking the overarching responsive dashboard grid.
+- **Trade-offs Accepted:** The `generate_ai_response` and its parent features (`generate_evolution_summary`, etc.) now pass the `selected_model` parameter all the way down, slightly widening the function signatures.
+- **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/lib/api.js`, `client/src/components/AISummaryCard.jsx`, `client/src/components/AIDevelopmentStory.jsx`.
+
+### [2026-08-13] - Explicit Supabase API Role Grants for Local Development
+- **Context / Problem:** When using `supabase start` and applying custom SQL migrations containing standard `CREATE TABLE` commands, the local database does not automatically grant `SELECT`, `INSERT`, `UPDATE`, and `DELETE` privileges to the `anon`, `authenticated`, and `service_role` API roles. This is because the local default ACLs (`pg_default_acl`) only grant `TRUNCATE`, `REFERENCES`, and `TRIGGER` to these roles.
+- **Options Considered:**
+  1. Manually run a one-time `GRANT` query directly against the local Postgres database.
+  2. Create a new idempotent migration file to explicitly grant the necessary privileges.
+- **Decision:** Selected Option 2 (explicit migration `007_api_role_grants.sql`).
+- **Rationale:** Ensures that the local development environment remains reproducible via `supabase db reset`. Relies on explicit SQL DCL (Data Control Language) rather than undocumented/implicit Supabase Studio UI behavior.
+- **Trade-offs Accepted:** Adds boilerplate `GRANT` and `ALTER DEFAULT PRIVILEGES` commands as a permanent migration step.
+- **Affected Files / Flow:** `server/supabase/migrations/007_api_role_grants.sql`
+
+### [2026-08-13] - Supabase Local Development via CLI vs. Main Docker Compose
+- **Context / Problem:** GitCompass requires a PostgreSQL database with Row-Level Security, an Auth service (GoTrue), and a REST API (PostgREST). We evaluated whether to integrate the open-source Supabase Docker image stack directly into our primary `docker-compose.yml` or use the official `supabase-cli`.
+- **Options Considered:**
+  1. Add Postgres, GoTrue, and PostgREST manually to `docker-compose.yml`.
+  2. Use `supabase start` to run the official local Supabase container stack independently.
+- **Decision:** Selected Option 2 (Supabase CLI).
+- **Rationale:** The Supabase local stack consists of ~10 interconnected microservices (Kong, GoTrue, Studio, Vector, PostgREST, etc.). Managing these manually within our primary `docker-compose.yml` adds immense maintenance overhead. By keeping it separate, our `docker-compose.yml` remains clean (FastAPI + Redis only) while the Supabase CLI handles database resets, migrations, and Auth/API parity with production via `.toml` configuration.
+- **Trade-offs Accepted:** Requires running two independent daemon commands during local development (`supabase start` and `docker compose up`).
+- **Affected Files / Flow:** `server/supabase/config.toml`, `README.md`
