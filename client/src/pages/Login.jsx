@@ -11,6 +11,10 @@ import { supabase } from "../lib/supabase";
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Local dev fallback
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleGitHubLogin = async () => {
     setLoading(true);
@@ -27,7 +31,34 @@ export default function Login() {
       setError(authError.message);
       setLoading(false);
     }
-    // On success, the browser redirects to GitHub — no need to handle here
+  };
+
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    if (!email || !password) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    // Attempt sign in
+    let { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    // Auto sign-up for local dev if user doesn't exist
+    if (authError && authError.message.includes("Invalid login credentials")) {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      authError = signUpError;
+    }
+
+    if (authError) {
+      setError(authError.message);
+    }
+    setLoading(false);
   };
 
   return (
@@ -77,7 +108,7 @@ export default function Login() {
             "
           >
             {loading ? (
-              <span className="animate-pulse-soft">Redirecting to GitHub…</span>
+              <span className="animate-pulse-soft">Redirecting…</span>
             ) : (
               <>
                 {/* GitHub icon */}
@@ -88,6 +119,48 @@ export default function Login() {
               </>
             )}
           </button>
+          
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-text-tertiary">Or local dev fallback</span>
+            </div>
+          </div>
+          
+          <form onSubmit={handleEmailLogin} className="space-y-3">
+            <input
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={loading}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={loading}
+            />
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="
+                w-full py-2 rounded-lg
+                bg-gray-100 text-gray-700
+                hover:bg-gray-200
+                disabled:opacity-50
+                text-sm font-medium
+                transition-colors
+              "
+            >
+              Sign In (Auto Sign-Up)
+            </button>
+          </form>
 
           {error && (
             <div className="mt-4 p-3 rounded-md bg-error-light text-error text-xs text-center">

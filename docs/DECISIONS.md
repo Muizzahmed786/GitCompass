@@ -175,3 +175,23 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Rationale:** Strict Enum validation (`auto`, `gemini_flash`, `gemini_flash_lite`, `groq`) ensures invalid models never reach the LLM SDK. Constraining the React components internally creates a consistent, scrollable widget interface without breaking the overarching responsive dashboard grid.
 - **Trade-offs Accepted:** The `generate_ai_response` and its parent features (`generate_evolution_summary`, etc.) now pass the `selected_model` parameter all the way down, slightly widening the function signatures.
 - **Affected Files / Flow:** `server/app/routers/ai.py`, `server/app/services/ai_service.py`, `client/src/lib/api.js`, `client/src/components/AISummaryCard.jsx`, `client/src/components/AIDevelopmentStory.jsx`.
+
+### [2026-08-13] - Explicit Supabase API Role Grants for Local Development
+- **Context / Problem:** When using `supabase start` and applying custom SQL migrations containing standard `CREATE TABLE` commands, the local database does not automatically grant `SELECT`, `INSERT`, `UPDATE`, and `DELETE` privileges to the `anon`, `authenticated`, and `service_role` API roles. This is because the local default ACLs (`pg_default_acl`) only grant `TRUNCATE`, `REFERENCES`, and `TRIGGER` to these roles.
+- **Options Considered:**
+  1. Manually run a one-time `GRANT` query directly against the local Postgres database.
+  2. Create a new idempotent migration file to explicitly grant the necessary privileges.
+- **Decision:** Selected Option 2 (explicit migration `007_api_role_grants.sql`).
+- **Rationale:** Ensures that the local development environment remains reproducible via `supabase db reset`. Relies on explicit SQL DCL (Data Control Language) rather than undocumented/implicit Supabase Studio UI behavior.
+- **Trade-offs Accepted:** Adds boilerplate `GRANT` and `ALTER DEFAULT PRIVILEGES` commands as a permanent migration step.
+- **Affected Files / Flow:** `server/supabase/migrations/007_api_role_grants.sql`
+
+### [2026-08-13] - Supabase Local Development via CLI vs. Main Docker Compose
+- **Context / Problem:** GitCompass requires a PostgreSQL database with Row-Level Security, an Auth service (GoTrue), and a REST API (PostgREST). We evaluated whether to integrate the open-source Supabase Docker image stack directly into our primary `docker-compose.yml` or use the official `supabase-cli`.
+- **Options Considered:**
+  1. Add Postgres, GoTrue, and PostgREST manually to `docker-compose.yml`.
+  2. Use `supabase start` to run the official local Supabase container stack independently.
+- **Decision:** Selected Option 2 (Supabase CLI).
+- **Rationale:** The Supabase local stack consists of ~10 interconnected microservices (Kong, GoTrue, Studio, Vector, PostgREST, etc.). Managing these manually within our primary `docker-compose.yml` adds immense maintenance overhead. By keeping it separate, our `docker-compose.yml` remains clean (FastAPI + Redis only) while the Supabase CLI handles database resets, migrations, and Auth/API parity with production via `.toml` configuration.
+- **Trade-offs Accepted:** Requires running two independent daemon commands during local development (`supabase start` and `docker compose up`).
+- **Affected Files / Flow:** `server/supabase/config.toml`, `README.md`

@@ -217,6 +217,13 @@ Whenever a file is added, modified, or refactored:
 
 ---
 
+### [server/supabase/migrations/007_api_role_grants.sql](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/supabase/migrations/007_api_role_grants.sql)
+- **Role:** Explicitly grants `SELECT, INSERT, UPDATE, DELETE` privileges to the `authenticated` and `service_role` roles for all tables in the `public` schema.
+- **Inputs:** Migration run.
+- **Outputs:** Modifies Postgres ACLs and `pg_default_acl` to ensure the local Supabase API can perform DML operations.
+
+---
+
 ## 💻 Frontend — Application & Routing
 
 ### [client/src/main.jsx](file:///c:/Users/mulla/Desktop/Projects/GitCompass/client/src/main.jsx)
