@@ -1,18 +1,11 @@
-/**
- * Dashboard — Repository Management & Analysis View.
- *
- * Provides functionality to:
- * - View API health status
- * - Track aggregated metrics (repos, commits, files)
- * - Add new GitHub repositories for analysis via POST /api/repositories
- * - Display live status updates (auto-polling pending/cloning/mining jobs)
- * - Delete repositories
- */
-
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import StatusBadge from "../components/StatusBadge";
+import Card from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Badge from "../components/ui/Badge";
 
 export default function Dashboard({ user }) {
   const [healthStatus, setHealthStatus] = useState("loading");
@@ -41,7 +34,6 @@ export default function Dashboard({ user }) {
     };
   }, []);
 
-  // Fetch branches when URL changes
   useEffect(() => {
     const fetchBranches = async () => {
       const match = newRepoUrl.match(/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?/);
@@ -71,7 +63,6 @@ export default function Dashboard({ user }) {
     return () => clearTimeout(timer);
   }, [newRepoUrl]);
 
-  // Set up auto-polling if any repository is actively mining
   useEffect(() => {
     const hasActiveMining = repositories.some((r) =>
       ["pending", "cloning", "mining"].includes(r.status)
@@ -173,193 +164,127 @@ export default function Dashboard({ user }) {
     user?.user_metadata?.user_name ||
     "there";
 
-  // Calculate high-level aggregates
-  const totalCommits = repositories.reduce(
-    (acc, r) => acc + (r.total_commits || 0),
-    0
-  );
-  const totalFiles = repositories.reduce(
-    (acc, r) => acc + (r.total_files || 0),
-    0
-  );
+  const totalCommits = repositories.reduce((acc, r) => acc + (r.total_commits || 0), 0);
+  const totalFiles = repositories.reduce((acc, r) => acc + (r.total_files || 0), 0);
 
   return (
-    <div className="animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
       {/* ── Header ─────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 border-b-4 border-[var(--color-border)] pb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-text-primary tracking-tight">
+          <Badge variant="primary" className="mb-2">DASHBOARD</Badge>
+          <h1 className="text-4xl font-black uppercase tracking-tight">
             Welcome, {displayName}
           </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Your repository analysis dashboard
+          <p className="mt-2 text-[var(--color-text-secondary)] font-medium">
+            Your repository analysis overview
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-text-tertiary">API Status</span>
+          <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-tertiary)]">API Status</span>
           <StatusBadge status={healthStatus} />
         </div>
       </div>
 
       {/* ── Metric Cards ───────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 stagger-children">
-        <div className="card-flat p-5">
-          <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
-            Repositories
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-text-primary">
-            {repositories.length}
-          </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="panel border-4">
+          <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2">Repositories</p>
+          <p className="text-5xl font-black">{repositories.length}</p>
         </div>
-        <div className="card-flat p-5">
-          <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
-            Total Commits
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-text-primary">
-            {totalCommits.toLocaleString()}
-          </p>
+        <div className="panel border-4">
+          <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2">Total Commits</p>
+          <p className="text-5xl font-black">{totalCommits.toLocaleString()}</p>
         </div>
-        <div className="card-flat p-5">
-          <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider">
-            Files Tracked
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-text-primary">
-            {totalFiles.toLocaleString()}
-          </p>
+        <div className="panel border-4">
+          <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-tertiary)] mb-2">Files Tracked</p>
+          <p className="text-5xl font-black">{totalFiles.toLocaleString()}</p>
         </div>
       </div>
 
-      {/* ── Action Header & Add Modal Trigger ──────────── */}
-      <div className="flex items-center justify-between mb-6">
+      {/* ── Action Header ──────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[var(--color-surface-raised)] border-4 border-[var(--color-border)] p-6 shadow-hard">
         <div>
-          <h2 className="text-lg font-semibold text-text-primary">
-            Analyzed Repositories
-          </h2>
-          <p className="text-xs text-text-secondary">
-            Git history intelligence & churn metrics
-          </p>
+          <h2 className="text-2xl font-black uppercase">Analyzed Repositories</h2>
+          <p className="text-sm font-medium text-[var(--color-text-secondary)] mt-1">Git history intelligence & churn metrics</p>
         </div>
-
-        <button
-          onClick={() => {
-            setShowAddModal(true);
-            setFormError(null);
-          }}
-          className="
-            inline-flex items-center gap-2
-            px-4 py-2 rounded-lg
-            bg-primary-600 text-white text-sm font-medium
-            hover:bg-primary-700
-            transition-colors duration-150
-            cursor-pointer shadow-sm
-          "
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 4.5v15m7.5-7.5h-15"
-            />
+        <Button onClick={() => { setShowAddModal(true); setFormError(null); }} className="whitespace-nowrap">
+          <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="square" strokeLinejoin="miter" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
           Add Repository
-        </button>
+        </Button>
       </div>
 
       {/* ── Add Repository Modal ───────────────────────── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-fade-in">
-          <div className="bg-surface-raised border border-border rounded-2xl max-w-md w-full p-6 shadow-elevated">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-text-primary">
-                Analyze a Repository
-              </h3>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-text-tertiary hover:text-text-primary p-1 rounded-lg hover:bg-surface-hover cursor-pointer"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)}></div>
+          <div className="relative bg-[var(--color-surface-raised)] border-4 border-[var(--color-border)] shadow-[12px_12px_0px_#121212] max-w-lg w-full">
+            
+            <div className="p-6 border-b-4 border-[var(--color-border)] flex items-center justify-between bg-[var(--color-primary)]">
+              <h3 className="text-xl font-black uppercase">Analyze a Repository</h3>
+              <button onClick={() => setShowAddModal(false)} className="border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] p-1 hover:shadow-hard hover:-translate-y-0.5 transition-all">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="square" strokeLinejoin="miter" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            <form onSubmit={handleAddRepository}>
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">
-                  GitHub Repository URL
-                </label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="url"
-                      required
-                      value={newRepoUrl}
-                      onChange={(e) => setNewRepoUrl(e.target.value)}
-                      placeholder="e.g. https://github.com/facebook/react"
-                      className="w-full px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
-                      disabled={submitting}
-                    />
-                    {availableBranches.length > 0 ? (
-                      <select
-                        value={newRepoBranch}
-                        onChange={(e) => setNewRepoBranch(e.target.value)}
-                        className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
-                        disabled={submitting}
-                      >
-                        <option value="">Default branch</option>
-                        {availableBranches.map(branch => (
-                          <option key={branch} value={branch}>{branch}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={newRepoBranch}
-                        onChange={(e) => setNewRepoBranch(e.target.value)}
-                        placeholder={fetchingBranches ? "Loading branches..." : "Branch (e.g. main)"}
-                        className="w-full sm:w-48 px-3.5 py-2.5 rounded-lg border border-border bg-surface text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all duration-150"
-                        disabled={submitting || fetchingBranches}
-                      />
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-text-tertiary">
-                    Enter a public GitHub repository URL. The optional branch defaults to the primary branch. 
-                    If this repository is already tracked, it will be wiped and re-mined!
-                  </p>
+            <form onSubmit={handleAddRepository} className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-black uppercase mb-2">GitHub Repository URL</label>
+                <Input
+                  type="url"
+                  required
+                  value={newRepoUrl}
+                  onChange={(e) => setNewRepoUrl(e.target.value)}
+                  placeholder="https://github.com/facebook/react"
+                  disabled={submitting}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-black uppercase mb-2">Branch (Optional)</label>
+                {availableBranches.length > 0 ? (
+                  <select
+                    value={newRepoBranch}
+                    onChange={(e) => setNewRepoBranch(e.target.value)}
+                    className="w-full p-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] font-mono text-sm focus:outline-none focus:shadow-hard transition-shadow"
+                    disabled={submitting}
+                  >
+                    <option value="">Default branch</option>
+                    {availableBranches.map(branch => (
+                      <option key={branch} value={branch}>{branch}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    type="text"
+                    value={newRepoBranch}
+                    onChange={(e) => setNewRepoBranch(e.target.value)}
+                    placeholder={fetchingBranches ? "Loading branches..." : "main"}
+                    disabled={submitting || fetchingBranches}
+                  />
+                )}
+                <p className="mt-2 text-xs font-medium text-[var(--color-text-secondary)]">
+                  If this repository is already tracked, it will be wiped and re-mined.
+                </p>
               </div>
 
               {formError && (
-                <div className="mb-4 p-3 rounded-lg bg-error-light text-error text-xs">
+                <div className="p-4 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] shadow-[4px_4px_0px_#121212]">
                   {formError}
                 </div>
               )}
 
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  disabled={submitting}
-                  className="px-4 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover cursor-pointer"
-                >
+              <div className="pt-4 border-t-2 border-[var(--color-border)] flex justify-end gap-4">
+                <Button type="button" variant="secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="
-                    px-4 py-2 rounded-lg text-sm font-medium text-white
-                    bg-primary-600 hover:bg-primary-700
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    transition-colors duration-150 cursor-pointer
-                  "
-                >
-                  {submitting ? "Starting Mine…" : "Mine Repository"}
-                </button>
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "STARTING MINE..." : "MINE REPOSITORY"}
+                </Button>
               </div>
             </form>
           </div>
@@ -368,171 +293,107 @@ export default function Dashboard({ user }) {
 
       {/* ── Repositories List ──────────────────────────── */}
       {loadingRepos ? (
-        <div className="card-flat p-12 text-center text-text-secondary animate-pulse-soft">
-          Loading repositories…
+        <div className="panel border-4 p-12 text-center text-[var(--color-text-secondary)] font-bold uppercase tracking-widest animate-pulse">
+          Loading repositories...
         </div>
       ) : repositories.length === 0 ? (
-        /* Empty State */
-        <div className="card p-10 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary-50 rounded-xl mb-4">
-            <svg
-              className="w-6 h-6 text-primary-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 4.5v15m7.5-7.5h-15"
-              />
+        <div className="panel border-4 p-16 text-center bg-[var(--color-surface)]">
+          <div className="w-16 h-16 mx-auto bg-[var(--color-primary)] border-4 border-[var(--color-border)] shadow-hard mb-6 flex items-center justify-center">
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="square" strokeLinejoin="miter" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
           </div>
-          <h3 className="text-base font-semibold text-text-primary">
-            No repositories analyzed yet
-          </h3>
-          <p className="mt-1 text-sm text-text-secondary max-w-sm mx-auto">
-            Click the button below to add your first GitHub repository URL and begin mining.
+          <h3 className="text-2xl font-black uppercase mb-2">Your engineering story starts here</h3>
+          <p className="text-[var(--color-text-secondary)] font-medium mb-8 max-w-md mx-auto">
+            No repositories analyzed yet. Add your first GitHub repository to build your intelligence dashboard.
           </p>
-          <button
-            onClick={() => {
-              setShowAddModal(true);
-              setFormError(null);
-            }}
-            className="
-              mt-5 inline-flex items-center gap-2
-              px-4 py-2 rounded-lg
-              bg-primary-600 text-white text-sm font-medium
-              hover:bg-primary-700
-              transition-colors duration-150 cursor-pointer shadow-sm
-            "
-          >
-            Add Repository
-          </button>
+          <Button onClick={() => { setShowAddModal(true); setFormError(null); }}>
+            ANALYZE YOUR FIRST REPOSITORY
+          </Button>
         </div>
       ) : (
-        /* Repository Cards */
-        <div className="grid grid-cols-1 gap-4">
+        <div className="space-y-6">
           {repositories.map((repo) => (
-            <div
-              key={repo.id}
-              className="card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-base font-semibold text-text-primary group-hover:text-primary-600 transition-colors">
-                      {repo.name || "Unknown Repository"}
-                    </h3>
-                    {repo.default_branch && (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-surface text-text-secondary border border-border uppercase tracking-wide">
-                        {repo.default_branch}
-                      </span>
-                    )}
-                  </div>
-                  <StatusBadge status={repo.status} />
-                  {repo.status === 'mining' && repo.mining_progress !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 bg-surface-hover rounded-full overflow-hidden border border-border">
-                        <div 
-                          className="h-full bg-primary-500 rounded-full transition-all duration-300"
-                          style={{ width: `${repo.mining_progress}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] font-medium text-text-secondary w-7">
-                        {repo.mining_progress}%
-                      </span>
-                    </div>
+            <Card key={repo.id} className="border-4 flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center">
+              
+              <div className="space-y-3 flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-xl font-black truncate" title={repo.name || "Unknown Repository"}>
+                    {repo.name || "Unknown Repository"}
+                  </h3>
+                  {repo.default_branch && (
+                    <Badge>{repo.default_branch}</Badge>
                   )}
+                  <StatusBadge status={repo.status} />
                 </div>
 
                 <a
                   href={repo.github_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-text-tertiary hover:text-primary-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-mono text-[var(--color-info)] hover:underline truncate"
                 >
-                  {repo.github_url}
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="square" strokeLinejoin="miter" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                   </svg>
+                  <span className="truncate">{repo.github_url}</span>
                 </a>
 
-                {repo.error_message && (
-                  <p className="text-xs text-error mt-1 bg-error-light p-2 rounded-md">
-                    Error: {repo.error_message}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-6 sm:gap-8">
-                <div className="text-right">
-                  <p className="text-xs text-text-tertiary uppercase tracking-wider">Commits</p>
-                  <p className="text-sm font-semibold text-text-primary">
-                    {repo.total_commits ? repo.total_commits.toLocaleString() : "—"}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <p className="text-xs text-text-tertiary uppercase tracking-wider">Files</p>
-                  <p className="text-sm font-semibold text-text-primary">
-                    {repo.total_files ? repo.total_files.toLocaleString() : "—"}
-                  </p>
-                </div>
-
-                {repo.status === "ready" && (
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/repository/${repo.id}`}
-                      className="
-                        inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                        bg-primary-50 text-primary-700 text-sm font-medium
-                        hover:bg-primary-100 transition-colors
-                      "
-                    >
-                      Analytics
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-
-                    <Link
-                      to={`/repository/${repo.id}/architecture`}
-                      className="
-                        inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                        bg-surface-raised border border-border text-text-primary text-sm font-medium
-                        hover:bg-surface-hover transition-colors
-                      "
-                      title="View Repository Architecture Map"
-                    >
-                      Architecture Map
-                    </Link>
+                {repo.status === 'mining' && repo.mining_progress !== undefined && (
+                  <div className="w-full max-w-md">
+                    <div className="flex justify-between text-xs font-black uppercase mb-1">
+                      <span>Mining Progress</span>
+                      <span>{repo.mining_progress}%</span>
+                    </div>
+                    <div className="h-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] w-full">
+                      <div className="h-full bg-[var(--color-primary)] transition-all duration-300" style={{ width: `${repo.mining_progress}%` }}></div>
+                    </div>
                   </div>
                 )}
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleRetryRepository(repo)}
-                    className="p-2 text-text-tertiary hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors cursor-pointer"
-                    title="Retry / Re-mine repository"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                {repo.error_message && (
+                  <div className="p-3 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] text-xs uppercase shadow-[2px_2px_0px_#121212]">
+                    ERROR: {repo.error_message}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-6 shrink-0 pt-4 xl:pt-0 border-t-2 xl:border-t-0 border-[var(--color-border)] w-full xl:w-auto">
+                <div className="text-left xl:text-right">
+                  <p className="text-[10px] font-black text-[var(--color-text-tertiary)] uppercase tracking-widest">Commits</p>
+                  <p className="text-xl font-black">{repo.total_commits ? repo.total_commits.toLocaleString() : "—"}</p>
+                </div>
+                
+                <div className="text-left xl:text-right">
+                  <p className="text-[10px] font-black text-[var(--color-text-tertiary)] uppercase tracking-widest">Files</p>
+                  <p className="text-xl font-black">{repo.total_files ? repo.total_files.toLocaleString() : "—"}</p>
+                </div>
+
+                <div className="flex items-center gap-3 ml-auto xl:ml-4">
+                  {repo.status === "ready" && (
+                    <>
+                      <Link to={`/repository/${repo.id}`}>
+                        <Button className="px-4 py-2 text-xs">ANALYTICS</Button>
+                      </Link>
+                      <Link to={`/repository/${repo.id}/architecture`}>
+                        <Button variant="secondary" className="px-4 py-2 text-xs">ARCHITECTURE</Button>
+                      </Link>
+                    </>
+                  )}
+                  
+                  <button onClick={() => handleRetryRepository(repo)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-primary)] shadow-[2px_2px_0px_#121212] transition-colors" title="Retry / Re-mine">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="square" strokeLinejoin="miter" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => handleDeleteRepository(repo.id, repo.name)}
-                    className="p-2 text-text-tertiary hover:text-error hover:bg-error-light rounded-lg transition-colors cursor-pointer"
-                    title="Delete repository"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  <button onClick={() => handleDeleteRepository(repo.id, repo.name)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-warning)] hover:text-white shadow-[2px_2px_0px_#121212] transition-colors" title="Delete">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="square" strokeLinejoin="miter" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

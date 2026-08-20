@@ -1,36 +1,26 @@
-/**
- * App — Root component with auth-gated routing.
- *
- * Subscribes to supabase.auth.onAuthStateChange and renders:
- * - <Login /> for unauthenticated users
- * - <Layout><Dashboard /></Layout> for authenticated users
- *
- * Session state is managed via Supabase's built-in listener,
- * so OAuth redirects and token refreshes are handled automatically.
- */
-
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 import Layout from "./components/Layout";
+import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import RepositoryAnalytics from "./pages/RepositoryAnalytics";
 import ArchitectureMap from "./pages/ArchitectureMap";
+import { ThemeProvider } from "./lib/ThemeContext";
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get the initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Listen for auth state changes (login, logout, token refresh)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -41,47 +31,40 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Show nothing while we check for an existing session
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center animate-fade-in">
-          <div className="inline-flex items-center justify-center w-10 h-10 bg-primary-100 rounded-xl mb-3">
-            <svg
-              className="w-5 h-5 text-primary-600 animate-pulse-soft"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-              />
-            </svg>
-          </div>
-          <p className="text-sm text-text-secondary">Loading…</p>
+      <div className="min-h-screen bg-[var(--color-surface)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-technical text-2xl font-bold animate-pulse">LOADING...</div>
         </div>
       </div>
     );
   }
 
-  // Not authenticated → show login
-  if (!session) {
-    return <Login />;
-  }
+  // Protected Route Wrapper
+  const ProtectedRoute = ({ children }) => {
+    if (!session) return <Navigate to="/login" replace />;
+    return <Layout user={session.user}>{children}</Layout>;
+  };
 
-  // Authenticated → show dashboard with routing
   return (
-    <BrowserRouter>
-      <Layout user={session.user}>
+    <ThemeProvider>
+      <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard user={session.user} />} />
-          <Route path="/repository/:id" element={<RepositoryAnalytics user={session.user} />} />
-          <Route path="/repository/:id/architecture" element={<ArchitectureMap user={session.user} />} />
+          {/* Public Routes */}
+          <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
+          <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="/register" element={session ? <Navigate to="/dashboard" replace /> : <Register />} />
+
+          {/* Protected Routes */}
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard user={session?.user} /></ProtectedRoute>} />
+          <Route path="/repository/:id" element={<ProtectedRoute><RepositoryAnalytics user={session?.user} /></ProtectedRoute>} />
+          <Route path="/repository/:id/architecture" element={<ProtectedRoute><ArchitectureMap user={session?.user} /></ProtectedRoute>} />
+          
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Layout>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
