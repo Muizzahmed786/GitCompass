@@ -1,70 +1,47 @@
-import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useState } from 'react';
 import { api } from '../lib/api';
 
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      onClick={handleCopy}
-      title="Copy to clipboard"
-      className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-    >
-      {copied ? (
-        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-      ) : (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
 export default function AISummaryCard({ repoId }) {
-  const [summary, setSummary] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [generated, setGenerated] = useState(false);
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
+  const [summaryData, setSummaryData] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
   const [isStale, setIsStale] = useState(false);
   const [selectedModel, setSelectedModel] = useState('auto');
 
   const fetchSummary = async (force = false) => {
-    setLoading(true);
-    setError('');
+    if (status === 'loading') return;
+    setStatus('loading');
+    setErrorMsg('');
     try {
       const data = await api.getAISummary(repoId, { model: selectedModel, force_refresh: force });
-      setSummary(data.summary || '');
-      setIsStale(data.is_stale || false);
-      setGenerated(!!data.summary);
+      if (data && data.summary) {
+        setSummaryData(data.summary);
+        setIsStale(data.is_stale || false);
+        setStatus('success');
+      } else {
+        // Handle case where backend returned empty (e.g. not cached and force=false, or generation failed silently)
+        setStatus('idle');
+      }
     } catch (err) {
-      setError(err.message || 'Failed to generate AI summary.');
-    } finally {
-      setLoading(false);
+      setErrorMsg(err.message || 'AI generation unavailable. Please try again.');
+      setStatus('error');
     }
   };
 
-  useEffect(() => {
-    fetchSummary(false);
-  }, [repoId, selectedModel]);
+  const techStack = summaryData?.technology_stack || {};
+  const hasTech = (techStack.languages?.length > 0) || 
+                  (techStack.frameworks?.length > 0) || 
+                  (techStack.databases?.length > 0) || 
+                  (techStack.infrastructure?.length > 0);
 
   return (
-    <div className="bg-surface rounded-xl shadow-sm border border-divider flex flex-col max-h-[500px]">
-      <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0 border-b border-transparent">
-        <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
-          <svg className="w-5 h-5 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-          </svg>
-          AI Evolution Summary
+    <div className="card flex flex-col max-h-[800px]">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6 shrink-0">
+        <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+          <span className="w-3 h-3 bg-special shadow-hard-sm"></span>
+          AI Summary
         </h3>
-        {(generated || !!error) && (
+        {status === 'success' && (
           <div className="flex items-center gap-2">
             <select
               value={selectedModel}
@@ -76,60 +53,146 @@ export default function AISummaryCard({ repoId }) {
               <option value="gemini_flash_lite">Flash Lite</option>
               <option value="groq">Groq</option>
             </select>
-            {summary && <CopyButton text={summary} />}
-            {summary && (
-              <button
-                onClick={() => fetchSummary(true)}
-                disabled={loading}
-                title={isStale ? "Generate Updated Analysis" : "Regenerate Analysis"}
-                className="px-2 py-1 text-xs rounded-md bg-surface-hover border border-divider hover:bg-primary-50 hover:text-primary-600 transition-colors disabled:opacity-50"
-              >
-                {isStale ? "Generate Updated" : "Regenerate"}
-              </button>
-            )}
+            <button
+              onClick={() => fetchSummary(true)}
+              disabled={status === 'loading'}
+              className="btn btn-secondary text-xs px-3 py-1.5"
+            >
+              {isStale ? "Generate Updated" : "Regenerate"}
+            </button>
           </div>
         )}
       </div>
 
-      <div className="px-6 pb-6 pt-2 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-text-tertiary [&::-webkit-scrollbar-track]:bg-transparent">
-        {error && (
-          <div className="mb-4 text-red-500 text-sm bg-red-50 rounded-lg p-3">{error}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+        {status === 'error' && (
+          <div className="mb-4 panel border-warning border-l-4">
+            <p className="font-bold text-warning mb-2">Failed to load AI Summary</p>
+            <p className="text-sm text-text-secondary mb-4">{errorMsg}</p>
+            <button onClick={() => fetchSummary(true)} className="btn btn-secondary text-xs">
+              Retry
+            </button>
+          </div>
         )}
         
-        {loading && !summary ? (
-          <div className="space-y-3 animate-pulse">
-            <div className="h-4 bg-surface-hover rounded w-3/4"></div>
-            <div className="h-4 bg-surface-hover rounded w-full"></div>
-            <div className="h-4 bg-surface-hover rounded w-5/6"></div>
-            <div className="h-4 bg-surface-hover rounded w-full"></div>
-            <div className="h-4 bg-surface-hover rounded w-2/3"></div>
+        {status === 'loading' && (
+          <div className="space-y-4 animate-pulse-soft py-4">
+            <div className="h-4 bg-border-subtle w-3/4"></div>
+            <div className="h-4 bg-border-subtle w-full"></div>
+            <div className="h-4 bg-border-subtle w-5/6"></div>
+            <div className="h-4 bg-border-subtle w-1/2"></div>
+            <div className="text-xs font-bold text-text-tertiary mt-4">ANALYZING REPOSITORY...</div>
           </div>
-        ) : summary ? (
-          <div className="flex flex-col">
+        )}
+
+        {status === 'success' && summaryData && (
+          <div className="flex flex-col gap-6">
             {isStale && (
-              <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
-                <span className="text-sm text-amber-800">Analysis is outdated. The repository has new commits.</span>
+              <div className="panel border-warning bg-surface-raised flex items-center justify-between">
+                <span className="text-sm font-bold text-warning">Analysis is outdated (new commits found)</span>
                 <button
                   onClick={() => fetchSummary(true)}
-                  disabled={loading}
-                  className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  disabled={status === 'loading'}
+                  className="btn btn-secondary text-xs px-2 py-1"
                 >
-                  Generate Updated Analysis
+                  Update
                 </button>
               </div>
             )}
-            <div className="prose prose-sm max-w-none text-text-secondary [&>p]:mb-3 [&>p:last-child]:mb-0 [&>ul]:mb-3 [&>ul]:pl-4 [&_li]:mb-1 [&_strong]:text-text-primary [&_code]:bg-surface-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-text-primary [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-text-primary [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-text-primary">
-              <ReactMarkdown>{summary}</ReactMarkdown>
-            </div>
+            
+            {/* Repository Identity */}
+            {(summaryData.what_is_this || summaryData.architecture_overview) && (
+              <section className="space-y-3">
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-widest border-b-2 border-border pb-1">Repository</h4>
+                {summaryData.what_is_this && (
+                  <p className="text-sm text-text-primary leading-relaxed font-medium">
+                    {summaryData.what_is_this}
+                  </p>
+                )}
+                {summaryData.architecture_overview && (
+                  <p className="text-sm text-text-secondary leading-relaxed">
+                    {summaryData.architecture_overview}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Technology Stack */}
+            {hasTech && (
+              <section className="space-y-3">
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-widest border-b-2 border-border pb-1">Technology Stack</h4>
+                {techStack && Object.keys(techStack).length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {Object.entries(techStack).map(([category, items]) => {
+                      if (!Array.isArray(items) || items.length === 0) return null;
+                      return (
+                        <div key={category}>
+                          <span className="text-[10px] font-bold text-text-secondary uppercase mb-1 block">
+                            {category.replace(/_/g, ' ')}
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {items.map(t => (
+                              <span key={t} className="badge badge-primary">{t}</span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+            {/* Hotspots */}
+            {summaryData.key_areas && summaryData.key_areas.length > 0 && (
+              <section className="space-y-3">
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-widest border-b-2 border-border pb-1">Hotspots</h4>
+                <div className="flex flex-col gap-3">
+                  {summaryData.key_areas.map((area, idx) => (
+                    <div key={idx} className="panel bg-surface p-3 border-l-4 border-l-warning">
+                      <div className="text-technical font-bold text-text-primary mb-1 break-all">
+                        {area.area}
+                      </div>
+                      <div className="text-xs text-text-secondary">
+                        {area.why_important}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Onboarding Notes */}
+            {summaryData.onboarding_notes && (
+              <section className="space-y-3">
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-widest border-b-2 border-border pb-1">Onboarding</h4>
+                <div className="panel bg-surface border-special">
+                  <p className="text-sm text-text-primary leading-relaxed font-medium">
+                    {summaryData.onboarding_notes}
+                  </p>
+                </div>
+              </section>
+            )}
+            
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-8 gap-3">
+        )}
+
+        {status === 'idle' && (
+          <div className="flex flex-col items-center justify-center py-10 gap-4 text-center px-4 panel border-dashed">
+            <div className="w-12 h-12 bg-surface-raised border-2 border-border flex items-center justify-center mb-2 shadow-hard-sm">
+               <span className="font-bold text-special text-xl">?</span>
+            </div>
+            <div className="text-sm font-bold text-text-primary">
+              No analysis generated yet.
+            </div>
+            <p className="text-xs text-text-secondary max-w-xs mb-2">
+              Analyze this codebase with AI to understand its architecture and stack.
+            </p>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-text-tertiary">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="text-xs border border-divider bg-surface rounded-md text-text-secondary focus:ring-primary-500 cursor-pointer py-1.5 pl-3 pr-8"
+                className="text-xs border border-divider bg-surface rounded-md text-text-secondary cursor-pointer py-1.5 pl-3 pr-8"
               >
                 <option value="auto">Auto (Recommended)</option>
                 <option value="gemini_flash">Gemini Flash</option>
@@ -137,22 +200,12 @@ export default function AISummaryCard({ repoId }) {
                 <option value="groq">Groq Llama 3</option>
               </select>
             </div>
-            <div className="text-sm text-text-secondary mb-4 text-center">
-              No analysis has been generated for this repository yet.
-            </div>
             <button
               onClick={() => fetchSummary(true)}
-              disabled={loading}
-              className="group flex items-center gap-2 px-5 py-2.5 bg-surface-hover border border-divider rounded-xl hover:border-primary-300 hover:bg-primary-50 transition-all disabled:opacity-50"
+              className="btn btn-primary"
             >
-              <svg className="w-5 h-5 text-text-tertiary group-hover:text-primary-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-              </svg>
-              <span className="text-sm font-medium text-text-secondary group-hover:text-primary-600 transition-colors">
-                Generate Analysis
-              </span>
+              Generate Summary
             </button>
-            <p className="text-xs text-text-tertiary">Analyze this codebase with AI</p>
           </div>
         )}
       </div>

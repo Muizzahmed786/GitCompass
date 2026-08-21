@@ -8,6 +8,7 @@ from enum import Enum
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Any
 
 from app.dependencies import CurrentUser, UserDB
 from app.services.ai_service import (
@@ -16,6 +17,7 @@ from app.services.ai_service import (
     answer_qa,
     generate_development_story,
 )
+from app.services.evidence_assembler import assemble_evidence
 from datetime import datetime
 
 
@@ -35,7 +37,7 @@ class AIRequest(BaseModel):
     force_refresh: bool = False
 
 class AISummaryResponse(BaseModel):
-    summary: str | None = None
+    summary: Any = None
     is_cached: bool = False
     is_stale: bool = False
 
@@ -71,62 +73,11 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
             
             return {"summary": cached_content, "is_cached": True, "is_stale": is_stale}
 
-        # Fetch file diffs joined with commits for hotspot aggregation
-        hotspots_raw = (
-            db.table("file_diffs")
-            .select("file_path, insertions, deletions, commits!inner(author_name)")
-            .eq("repo_id", repo_id)
-            .limit(2000)
-            .execute()
-        )
+        evidence = assemble_evidence(repo_id, db)
 
-        file_stats = defaultdict(lambda: {"commits_count": 0, "insertions": 0, "deletions": 0, "authors": defaultdict(int)})
-        for row in (hotspots_raw.data or []):
-            path = row["file_path"]
-            author = (row.get("commits") or {}).get("author_name", "Unknown")
-            file_stats[path]["commits_count"] += 1
-            file_stats[path]["insertions"] += row.get("insertions", 0)
-            file_stats[path]["deletions"] += row.get("deletions", 0)
-            file_stats[path]["authors"][author] += 1
-
-        hotspots = []
-        for path, stats in sorted(file_stats.items(), key=lambda x: x[1]["commits_count"], reverse=True)[:10]:
-            top_author = max(stats["authors"], key=stats["authors"].get) if stats["authors"] else "Unknown"
-            hotspots.append({
-                "file_path": path,
-                "commits_count": stats["commits_count"],
-                "insertions": stats["insertions"],
-                "deletions": stats["deletions"],
-                "top_author": top_author
-            })
-
-        # Count unique authors and commits per author
-        authors_res = db.table("commits").select("author_name").eq("repo_id", repo_id).execute()
-        author_counts = defaultdict(int)
-        for r in (authors_res.data or []):
-            if r.get("author_name"):
-                author_counts[r["author_name"]] += 1
-        
-        bus_factor = max(len(author_counts), 1)
-        top_authors = [{"author": k, "commits": v} for k, v in sorted(author_counts.items(), key=lambda x: x[1], reverse=True)[:5]]
-
-        aggregated_data = {
-            "repository": {
-                "name": repo_name,
-                "total_commits": total_commits,
-                "total_files_changed": len(file_stats),
-            },
-            "contributors": {
-                "total_count": len(author_counts),
-                "bus_factor": bus_factor,
-                "top_authors": top_authors
-            },
-            "hotspots": hotspots
-        }
-
-        summary_text = await generate_evolution_summary(
+        summary_data = await generate_evolution_summary(
             repo_name=repo_name,
-            aggregated_data=aggregated_data,
+            evidence=evidence,
             selected_model=selected_model
         )
         
@@ -136,10 +87,10 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
             "analysis_type": "summary",
             "model": selected_model,
             "latest_sha": latest_sha,
-            "content": summary_text
+            "content": summary_data
         }, on_conflict="repo_id,analysis_type,model").execute()
 
-        return {"summary": summary_text}
+        return {"summary": summary_data}
 
     except HTTPException:
         raise
@@ -173,54 +124,11 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, p
             
             return {"shifts": cached_content, "is_cached": True, "is_stale": is_stale}
 
-        # Fetch deterministic phases and their evidence (Stage 6 -> Stage 7)
-        phases_res = (
-            db.table("architecture_phases")
-            .select("id, title, start_date, end_date, dominant_event_type")
-            .eq("repo_id", repo_id)
-            .order("start_date", desc=False)
-            .execute()
-        )
-        
-        phases = []
-        for phase_row in (phases_res.data or []):
-            phase_id = phase_row["id"]
-            
-            # Fetch events for this phase
-            # Supabase Python client doesn't support deep nested joins easily, so we can fetch all events and filter, or fetch per phase.
-            # Let's fetch the event data using a join
-            events_res = (
-                db.table("architecture_phase_events")
-                .select("event_id, repository_events(event_type, event_key, event_date, metadata)")
-                .eq("phase_id", phase_id)
-                .execute()
-            )
-            
-            evidence = []
-            for ev_row in (events_res.data or []):
-                evt = ev_row.get("repository_events")
-                if evt:
-                    evidence.append({
-                        "type": evt.get("event_type"),
-                        "name": evt.get("event_key"),
-                        "date": evt.get("event_date"),
-                        "metadata": evt.get("metadata")
-                    })
-            
-            phases.append({
-                "phase": {
-                    "title": phase_row["title"],
-                    "start_date": phase_row["start_date"],
-                    "end_date": phase_row["end_date"],
-                    "dominant_event_type": phase_row["dominant_event_type"]
-                },
-                "evidence": evidence
-            })
+        evidence = assemble_evidence(repo_id, db)
 
         shifts = await detect_architecture_shifts(
             repo_name=repo_name,
-            total_commits=total_commits,
-            structured_phases=phases,
+            evidence=evidence,
             selected_model=selected_model
         )
         
@@ -307,76 +215,11 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, pay
             
             return {"story": cached_content, "is_cached": True, "is_stale": is_stale}
 
-        # Fetch commits chronologically
-        commits_res = (
-            db.table("commits")
-            .select("id, committed_at, message, insertions, deletions")
-            .eq("repo_id", repo_id)
-            .order("committed_at", desc=False)
-            .limit(500)
-            .execute()
-        )
+        evidence = assemble_evidence(repo_id, db)
 
-        commits = commits_res.data or []
-        if len(commits) < 3:
-            return {"story": "The available repository history is insufficient to establish a clear story."}
-
-        # Group by month YYYY-MM
-        monthly_groups = defaultdict(lambda: {
-            "commit_count": 0,
-            "additions": 0,
-            "deletions": 0,
-            "messages": []
-        })
-
-        for c in commits:
-            dt_str = c.get("committed_at", "")[:7] or "Unknown"
-            grp = monthly_groups[dt_str]
-            grp["commit_count"] += 1
-            grp["additions"] += c.get("insertions") or 0
-            grp["deletions"] += c.get("deletions") or 0
-            msg = (c.get("message") or "").strip().split("\n")[0]
-            if msg and len(msg) > 5 and msg not in grp["messages"]:
-                grp["messages"].append(msg)
-
-        # Build timeline periods list
-        timeline_periods = []
-        for period, data in sorted(monthly_groups.items(), key=lambda x: x[0]):
-            timeline_periods.append({
-                "period": period,
-                "commit_count": data["commit_count"],
-                "total_insertions": data["additions"],
-                "total_deletions": data["deletions"],
-                "sample_messages": data["messages"][:4]  # max 4 sample messages per month
-            })
-
-        # Compress older months if history spans more than 12 periods
-        if len(timeline_periods) > 12:
-            compressed = []
-            chunk_size = (len(timeline_periods) + 11) // 12
-            for i in range(0, len(timeline_periods), chunk_size):
-                chunk = timeline_periods[i:i + chunk_size]
-                start_p = chunk[0]["period"]
-                end_p = chunk[-1]["period"]
-                label = start_p if start_p == end_p else f"{start_p} to {end_p}"
-                c_count = sum(x["commit_count"] for x in chunk)
-                ins = sum(x["total_insertions"] for x in chunk)
-                dels = sum(x["total_deletions"] for x in chunk)
-                msgs = []
-                for x in chunk:
-                    msgs.extend(x["sample_messages"])
-                compressed.append({
-                    "period": label,
-                    "commit_count": c_count,
-                    "total_insertions": ins,
-                    "total_deletions": dels,
-                    "sample_messages": msgs[:5]
-                })
-            timeline_periods = compressed
-
-        story_text = await generate_development_story(
+        story_data = await generate_development_story(
             repo_name=repo_name,
-            timeline_data={"periods": timeline_periods},
+            evidence=evidence,
             selected_model=selected_model
         )
         
@@ -386,10 +229,10 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, pay
             "analysis_type": "story",
             "model": selected_model,
             "latest_sha": latest_sha,
-            "content": story_text
+            "content": story_data
         }, on_conflict="repo_id,analysis_type,model").execute()
 
-        return {"story": story_text}
+        return {"story": story_data}
 
     except HTTPException:
         raise

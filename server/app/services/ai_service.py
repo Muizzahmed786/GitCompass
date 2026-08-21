@@ -210,34 +210,93 @@ async def generate_ai_response(
 
 # ── AI Feature Functions ───────────────────────────────────────────────────
 
-async def generate_evolution_summary(repo_name: str, aggregated_data: dict, selected_model: str = "auto") -> str:
-    """Generates a concise developer-focused summary of the repository from aggregated JSON data."""
-    compact_json = json.dumps(aggregated_data, separators=(',', ':'))
+import re
 
-    system_prompt = ""
-    user_prompt = f"""You are analyzing a software repository called '{repo_name}' based on its Git history metrics.
+REPOSITORY_INTELLIGENCE_PROMPT = """You are a repository archaeology and software evolution analyst for GitCompass.
+You analyze structured, deterministic evidence extracted from a real Git repository.
+Your responsibility is to reason over the supplied evidence.
+You are NOT responsible for discovering facts that are absent from the evidence.
 
-Aggregated Data (JSON):
-{compact_json}
+Rules:
+1. Every factual claim must be supported by the supplied evidence.
+2. Never invent file names, technologies, dates, contributors, or architectural decisions.
+3. Never infer a previous technology merely because a new technology appears.
+4. Never claim a migration unless evidence supports both the new and previous state.
+5. Never claim developer motivation unless evidence supports it.
+6. If motivation or significance is reasonably inferred, label it [INFERENCE].
+7. If the evidence is insufficient to explain something, say [UNKNOWN].
+8. Prefer concrete repository entities over generic language.
+9. Prefer specific files, directories, technologies, phases, and dates.
+10. Do not repeat statistics without explaining their engineering significance.
+11. Do not produce generic statements that could describe any repository.
+12. Do not invent causal relationships between unrelated events.
+13. Treat Stage 5 and Stage 6 deterministic data as authoritative.
+14. Stage 6 phase boundaries must never be changed by you.
+15. If large_change events exist without clear architectural meaning, do not invent an explanation; state [UNKNOWN].
 
-Write a short, factual summary covering exactly the following three sections. You must use these exact markdown subheadings for each section:
+Return ONLY valid JSON.
+Do not wrap the response in markdown fences.
+Do not add commentary before or after the JSON.
+"""
 
-### Most Modified Files
-List the most actively developed files and their commit counts using concrete statistics.
+def _extract_json(text: str, is_array: bool = False) -> str:
+    """Robustly extract JSON from model output."""
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    
+    if is_array:
+        match = re.search(r'\[.*\]', text, re.DOTALL)
+    else:
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        
+    if match:
+        return match.group(0)
+    return text
 
-### Contributors & Ownership
-State the bus factor and describe the distribution of authorship among top authors using concrete statistics. Report Git authorship only; DO NOT infer actual knowledge, responsibility, expertise, or code ownership beyond the recorded commit data.
 
-### Development Patterns
-Note any observable patterns in the data (e.g., if development is concentrated in specific directories or file types).
+async def generate_evolution_summary(repo_name: str, evidence: dict, selected_model: str = "auto") -> dict:
+    """Generates a structured developer-focused summary of the repository from evidence."""
+    compact_evidence = json.dumps({
+        "repository": evidence.get("repository"),
+        "technology": evidence.get("technology"),
+        "phases": evidence.get("phases"),
+        "hotspots": evidence.get("hotspots"),
+        "contributors": evidence.get("contributors"),
+        "commit_sample": evidence.get("commit_sample")
+    }, separators=(',', ':'))
 
-CRITICAL RULES:
-- Summarize the data; DO NOT assess it.
-- Describe raw Git statistics first, then state only directly observable patterns from those statistics.
-- DO NOT invent risks, conclusions, or recommendations. Do not use words like "risk", "danger", "should", "recommend", or "mitigate" unless explicitly supported by the data.
-- Do not use filler words like "robust", "pivotal", "paramount", "leverage", or "strategic".
-- Be direct and brief. Each section must be exactly 1 paragraph of 2-3 concise sentences max.
-- Do not add any new sections, recommendations, conclusions, or commentary outside these three sections.
+    system_prompt = REPOSITORY_INTELLIGENCE_PROMPT
+    user_prompt = f"""You are generating an AI Summary for the repository '{repo_name}'.
+What is this repository, how is it built, how has it evolved, and what should a developer understand when onboarding?
+
+Evidence (JSON):
+{compact_evidence}
+
+Return a JSON object with exactly this schema:
+{{
+  "what_is_this": "Evidence-supported description of what the repository appears to be. Use [UNKNOWN] if evidence is insufficient.",
+  "technology_stack": {{
+    "languages": [],
+    "frameworks": [],
+    "databases": [],
+    "infrastructure": []
+  }},
+  "architecture_overview": "Evidence-supported description of the repository structure using directories and hotspots.",
+  "evolution_summary": "Concise explanation of how the repository evolved across its chronological phases. Avoid generic statements.",
+  "key_areas": [
+    {{
+      "area": "file or directory path",
+      "why_important": "Evidence-supported explanation (e.g. churn, activity)."
+    }}
+  ],
+  "onboarding_notes": "Important things a new developer should understand first. Use [UNKNOWN] if evidence is insufficient."
+}}
 """
     try:
         result = await generate_ai_response(
@@ -247,50 +306,53 @@ CRITICAL RULES:
             temperature=0.2,
             selected_model=selected_model
         )
-        return result["text"]
+        text = _extract_json(result["text"], is_array=False)
+        return json.loads(text)
     except AllProvidersFailedError as exc:
         logger.error(f"All AI providers failed for summary: {exc}")
-        return f"AI Analysis Unavailable: {exc}"
+        raise ValueError(f"AI Analysis Unavailable: {exc}")
+    except json.JSONDecodeError as exc:
+        logger.error(f"Malformed JSON returned by provider: {exc}")
+        raise ValueError(f"Failed to parse evolution summary from AI response: {exc}")
     except Exception as exc:
         logger.error(f"Failed to generate AI summary: {exc}")
-        return f"Failed to generate AI summary: {exc}"
+        raise ValueError(f"Failed to generate AI summary: {exc}")
 
 
-async def detect_architecture_shifts(repo_name: str, total_commits: int, structured_phases: List[Dict], selected_model: str = "auto") -> List[Dict]:
-    """
-    Detects major architectural shifts from deterministic phases (Stage 6).
-    Limits processing to repositories with <= MAX_COMMITS_FOR_SHIFT_DETECTION.
-    """
-    if total_commits > settings.MAX_COMMITS_FOR_SHIFT_DETECTION:
-        raise ValueError(
-            f"This repository has {total_commits} commits, which exceeds the {settings.MAX_COMMITS_FOR_SHIFT_DETECTION}-commit limit for shift detection. "
-            f"This limit exists to control token usage. You can raise it in config if needed."
-        )
-
-    if not structured_phases:
+async def detect_architecture_shifts(repo_name: str, evidence: dict, selected_model: str = "auto") -> List[Dict]:
+    """Detects major architectural shifts from deterministic phases (Stage 6)."""
+    
+    # We no longer limit based on total commits here because the evidence assembler already caps 
+    # the evidence size (e.g. top 30 commits). The full context is bounded.
+    phases = evidence.get("phases", [])
+    if not phases:
         raise ValueError("No architecture phases found for this repository. Ensure it has been fully mined and contains significant events.")
 
-    phases_json = json.dumps(structured_phases, indent=2, default=str)
+    compact_evidence = json.dumps({
+        "repository": evidence.get("repository"),
+        "technology": evidence.get("technology"),
+        "phases": phases
+    }, separators=(',', ':'))
 
-    system_prompt = ""
+    system_prompt = REPOSITORY_INTELLIGENCE_PROMPT
     user_prompt = f"""You are analyzing the architectural evolution of the repository '{repo_name}'.
+You are receiving deterministic architectural phases extracted by a static analysis engine.
+Phase boundaries are authoritative. Do not invent dates or phases that are not present in the evidence.
 
-Instead of raw commits, you are receiving deterministic architectural phases extracted by a static analysis engine. 
-Each phase contains hard evidence (such as framework dependencies added or directories created).
+Evidence (JSON):
+{compact_evidence}
 
-Phase Data (JSON):
-{phases_json}
-
-Synthesize these deterministic phases into a human-readable timeline of architectural shifts.
-Do NOT invent dates or phases that are not present in the data. You are simply translating the structured JSON into a readable narrative.
-
-Return ONLY a valid JSON array. No markdown, no explanation, no conversational filler.
-Each object must have exactly these keys:
-- "date": "YYYY-MM-DD" (use the start_date of the phase)
-- "title": short label (max 8 words) (you can use the phase title directly or polish it slightly)
-- "description": one factual sentence explaining what the architectural shift was and what evidence supports it. (IMPORTANT: Properly escape any quotes inside this string).
-
-If you cannot identify clear architectural shifts from the phase data, return an empty array: []
+Synthesize these deterministic phases into a chronological timeline of architectural shifts.
+Return a JSON array of objects. Each object must have exactly these keys:
+{{
+  "date": "YYYY-MM-DD (must use the phase start_date)",
+  "title": "Short architectural label",
+  "what_changed": "Concrete facts supported by evidence.",
+  "architectural_significance": "Why this matters. Use [INFERENCE] when interpretation is involved.",
+  "evidence_items": [
+    "String items directly from the evidence (e.g. 'dependency_added: fastapi')"
+  ]
+}}
 """
     try:
         result = await generate_ai_response(
@@ -300,21 +362,12 @@ If you cannot identify clear architectural shifts from the phase data, return an
             temperature=0.1,
             selected_model=selected_model
         )
-        
-        text = result["text"].strip()
-        
-        import re
-        # Robustly extract the JSON array, ignoring conversational filler before or after
-        match = re.search(r'\[.*\]', text, re.DOTALL)
-        if match:
-            text = match.group(0)
-                
+        text = _extract_json(result["text"], is_array=True)
         return json.loads(text)
     except AllProvidersFailedError as exc:
         logger.error(f"All AI providers failed for shift detection: {exc}")
         raise ValueError(f"AI Analysis Unavailable: {exc}")
     except json.JSONDecodeError as exc:
-        # Feature-level failure (does not trigger fallback)
         logger.error(f"Malformed JSON returned by provider: {exc}")
         raise ValueError(f"Failed to parse architecture shifts from AI response: {exc}")
     except Exception as exc:
@@ -351,26 +404,39 @@ Keep your answer concise and technical. Use markdown for formatting where it hel
         return f"Failed to answer question: {exc}"
 
 
-async def generate_development_story(repo_name: str, timeline_data: dict, selected_model: str = "auto") -> str:
-    """Generates a non-technical, chronological story retelling how the repository evolved over time."""
-    compact_json = json.dumps(timeline_data, separators=(',', ':'))
+async def generate_development_story(repo_name: str, evidence: dict, selected_model: str = "auto") -> dict:
+    """Generates a structured chronological story retelling how the repository evolved over time."""
+    compact_evidence = json.dumps({
+        "repository": evidence.get("repository"),
+        "phases": evidence.get("phases"),
+        "hotspots": evidence.get("hotspots"),
+        "technology": evidence.get("technology"),
+        "contributors": evidence.get("contributors"),
+        "commit_sample": evidence.get("commit_sample")
+    }, separators=(',', ':'))
 
-    system_prompt = ""
-    user_prompt = f"""You are telling the development story of the repository '{repo_name}' based on its chronological Git history summary.
+    system_prompt = REPOSITORY_INTELLIGENCE_PROMPT
+    user_prompt = f"""You are telling the development story of the repository '{repo_name}' based on its chronological evidence.
+How did this repository evolve as software over time? Do not merely summarize commit counts.
 
-Chronological Timeline Summary (JSON):
-{compact_json}
+Evidence (JSON):
+{compact_evidence}
 
-Write a short, intuitive, chronological story explaining how this project came together over time.
-
-STRICT RULES:
-- Use simple, approachable language. Feel like a concise narrative rather than a list of Git statistics.
-- Connect related changes into a coherent progression over time.
-- Only use information supported by the provided timeline summary.
-- NEVER invent developer intentions, motivations, unevidenced features, architectural decisions, or events that are not in the data.
-- Avoid excessive technical terminology or dramatic/marketing-style language.
-- Structure it with short chronological phase indicators (e.g., **Getting Started → Building Core Features → Recent Progression** or similar), including ONLY phases supported by the data.
-- CRITICAL: If the timeline data is too sparse or history is insufficient to form a story, explicitly state: "The available repository history is insufficient to establish a clear story."
+Return a JSON object with exactly this schema:
+{{
+  "phases": [
+    {{
+      "title": "Use the Stage 6 phase title",
+      "period": "YYYY-MM-DD to YYYY-MM-DD (from Stage 6)",
+      "narrative": "2-3 sentences explaining what happened and which areas were affected.",
+      "key_files": ["files present in evidence"],
+      "key_technologies": ["technologies supported by evidence"],
+      "key_contributors": ["contributors supported by evidence"],
+      "significance": "FACT: what evidence shows [INFERENCE] what this likely means"
+    }}
+  ],
+  "overall_arc": "One concise paragraph explaining the repository's overall evolution."
+}}
 """
     try:
         result = await generate_ai_response(
@@ -380,13 +446,18 @@ STRICT RULES:
             temperature=0.2,
             selected_model=selected_model
         )
-        return result["text"]
+        text = _extract_json(result["text"], is_array=False)
+        return json.loads(text)
     except AllProvidersFailedError as exc:
         logger.error(f"All AI providers failed for development story: {exc}")
-        return f"AI Analysis Unavailable: {exc}"
+        raise ValueError(f"AI Analysis Unavailable: {exc}")
+    except json.JSONDecodeError as exc:
+        logger.error(f"Malformed JSON returned by provider: {exc}")
+        raise ValueError(f"Failed to parse development story from AI response: {exc}")
     except Exception as exc:
         logger.error(f"Failed to generate development story: {exc}")
-        return f"Failed to generate development story: {exc}"
+        raise ValueError(f"Failed to generate development story: {exc}")
+
 
 
 

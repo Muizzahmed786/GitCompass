@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import HotspotTreemap from "../components/HotspotTreemap";
+import ArchitectureTimeline from "../components/ArchitectureTimeline";
 
 const COMMIT_TYPE_OPTIONS = [
   { value: "all", label: "All Types" },
@@ -260,6 +261,11 @@ export default function ArchitectureMap() {
         >
           Historical Files ({historicalHotspots.length})
         </button>
+      </div>
+
+      {/* ── Architecture Shifts ─────────────────────────── */}
+      <div className="mb-10">
+        <ArchitectureTimeline repoId={id} />
       </div>
 
       {/* ── Architecture Treemap ────────────────────────── */}
