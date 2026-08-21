@@ -220,7 +220,7 @@ export default function Dashboard({ user }) {
       {showAddModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowAddModal(false)}></div>
-          <div className="relative bg-[var(--color-surface-raised)] border-4 border-[var(--color-border)] shadow-[12px_12px_0px_#121212] max-w-lg w-full">
+          <div className="relative bg-[var(--color-surface-raised)] border-4 border-[var(--color-border)] shadow-hard-lg max-w-lg w-full">
             
             <div className="p-6 border-b-4 border-[var(--color-border)] flex items-center justify-between bg-[var(--color-primary)]">
               <h3 className="text-xl font-black uppercase">Analyze a Repository</h3>
@@ -273,7 +273,7 @@ export default function Dashboard({ user }) {
               </div>
 
               {formError && (
-                <div className="p-4 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] shadow-[4px_4px_0px_#121212]">
+                <div className="p-4 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] shadow-hard">
                   {formError}
                 </div>
               )}
@@ -352,7 +352,7 @@ export default function Dashboard({ user }) {
                 )}
 
                 {repo.error_message && (
-                  <div className="p-3 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] text-xs uppercase shadow-[2px_2px_0px_#121212]">
+                  <div className="p-3 bg-[var(--color-warning)] text-white font-bold border-2 border-[var(--color-border)] text-xs uppercase shadow-hard-sm">
                     ERROR: {repo.error_message}
                   </div>
                 )}
@@ -381,12 +381,12 @@ export default function Dashboard({ user }) {
                     </>
                   )}
                   
-                  <button onClick={() => handleRetryRepository(repo)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-primary)] shadow-[2px_2px_0px_#121212] transition-colors" title="Retry / Re-mine">
+                  <button onClick={() => handleRetryRepository(repo)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-primary)] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)] hover:text-[#121212]" title="Retry / Re-mine">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="square" strokeLinejoin="miter" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   </button>
-                  <button onClick={() => handleDeleteRepository(repo.id, repo.name)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-warning)] hover:text-white shadow-[2px_2px_0px_#121212] transition-colors" title="Delete">
+                  <button onClick={() => handleDeleteRepository(repo.id, repo.name)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-warning)] hover:text-[#121212] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)]" title="Delete">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="square" strokeLinejoin="miter" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>

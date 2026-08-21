@@ -130,14 +130,17 @@ body {
 /* Primary Button */
 .btn-primary {
   background-color: var(--color-primary);
+  color: #121212; /* Always dark text on bright yellow */
 }
 .btn-primary:hover {
   background-color: var(--color-primary-hover);
+  color: #121212;
 }
 
 /* Secondary Button */
 .btn-secondary {
   background-color: var(--color-surface-raised);
+  color: var(--color-text-primary);
 }
 .btn-secondary:hover {
   background-color: var(--color-surface);
@@ -157,11 +160,11 @@ body {
   box-shadow: 2px 2px 0px var(--color-border);
 }
 
-.badge-success { background-color: var(--color-success); }
-.badge-info { background-color: var(--color-info); color: white; }
-.badge-special { background-color: var(--color-special); color: white; }
-.badge-warning { background-color: var(--color-warning); color: white; }
-.badge-primary { background-color: var(--color-primary); }
+.badge-success { background-color: var(--color-success); color: #121212; }
+.badge-info { background-color: var(--color-info); color: #F5F4F0; }
+.badge-special { background-color: var(--color-special); color: #F5F4F0; }
+.badge-warning { background-color: var(--color-warning); color: #F5F4F0; }
+.badge-primary { background-color: var(--color-primary); color: #121212; }
 
 /* Technical Data Text */
 .text-technical {
@@ -174,6 +177,10 @@ body {
 
 .border-strong {
   border: var(--border-width) solid var(--color-border);
+}
+
+.shadow-hard-sm {
+  box-shadow: 2px 2px 0px var(--color-border);
 }
 
 .shadow-hard {
