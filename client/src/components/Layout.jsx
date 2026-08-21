@@ -7,6 +7,7 @@ import { useTheme } from '../lib/ThemeContext';
 export default function Layout({ children, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
@@ -134,12 +135,48 @@ export default function Layout({ children, user }) {
               )}
             </button>
 
-            <button className="relative text-[var(--color-text-primary)] hover:text-[var(--color-primary)] transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[var(--color-warning)] border-2 border-[var(--color-surface-raised)] rounded-full"></span>
-            </button>
+            {/* Notifications Toggle */}
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative text-[var(--color-text-primary)] hover:text-[var(--color-primary)] transition-colors p-1"
+                title="Notifications"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[var(--color-warning)] border-2 border-[var(--color-surface-raised)] rounded-full"></span>
+              </button>
+
+              {/* Notifications Dropdown */}
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-[var(--color-surface-raised)] border-4 border-[var(--color-border)] shadow-[8px_8px_0px_#121212] z-50">
+                  <div className="p-4 border-b-4 border-[var(--color-border)] bg-[var(--color-primary)] text-[#121212] flex justify-between items-center">
+                    <h4 className="font-black uppercase text-sm">Notifications</h4>
+                    <button onClick={() => setNotificationsOpen(false)} className="text-[#121212] font-black p-1 hover:bg-[#121212] hover:text-[#E2FF32]">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="square" strokeLinejoin="miter" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto p-0">
+                    <div className="p-4 border-b-2 border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] cursor-pointer">
+                      <p className="text-sm font-bold">Analysis Complete</p>
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-1">GitCompass repository has been successfully mined.</p>
+                      <p className="text-[10px] text-[var(--color-text-tertiary)] font-mono mt-2">Just now</p>
+                    </div>
+                    <div className="p-4 hover:bg-[var(--color-surface-hover)] cursor-pointer">
+                      <p className="text-sm font-bold">Welcome to GitCompass</p>
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-1">Your engineering intelligence dashboard is ready.</p>
+                      <p className="text-[10px] text-[var(--color-text-tertiary)] font-mono mt-2">1 hour ago</p>
+                    </div>
+                  </div>
+                  <div className="p-2 border-t-4 border-[var(--color-border)] text-center">
+                    <button className="text-xs font-black uppercase text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]">Mark all as read</button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 border-l-2 border-[var(--color-border)] pl-6">
               <div className="hidden sm:block text-right">
