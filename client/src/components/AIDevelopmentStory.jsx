@@ -1,152 +1,194 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useState } from 'react';
 import { api } from '../lib/api';
 
 export default function AIDevelopmentStory({ repoId }) {
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [story, setStory] = useState(null);
-  const [loading, setLoading] = useState(false); // Default to false
-  const [error, setError] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [isStale, setIsStale] = useState(false);
   const [selectedModel, setSelectedModel] = useState('auto');
 
-  const fetchStory = useCallback(async (force = false) => {
-    if (loading) return; // Prevent concurrent requests
-    
-    setLoading(true);
-    setError(null);
+  const fetchStory = async (force = false) => {
+    if (status === 'loading') return;
+    setStatus('loading');
+    setErrorMsg('');
     try {
-      const data = await api.post(`/api/ai/story/${repoId}`, { model: selectedModel, force_refresh: force });
-      setStory(data.story || '');
-      setIsStale(data.is_stale || false);
+      const data = await api.getAIStory(repoId, { model: selectedModel, force_refresh: force });
+      if (data && data.story) {
+        setStory(data.story);
+        setIsStale(data.is_stale || false);
+        setStatus('success');
+      } else {
+        setStatus('idle');
+      }
     } catch (err) {
-      setError(err.message || "Failed to generate development story");
-    } finally {
-      setLoading(false);
+      setErrorMsg(err.message || 'AI generation unavailable. Please try again.');
+      setStatus('error');
     }
-  }, [repoId, loading, selectedModel]);
-
-  useEffect(() => {
-    fetchStory(false);
-  }, [repoId, selectedModel]);
-
-  // Removed useEffect auto-fetch completely to prevent API calls on mount, re-renders, or polling.
-
-  const handleCopy = async () => {
-    if (!story) return;
-    await navigator.clipboard.writeText(story);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="bg-surface rounded-xl shadow-sm border border-divider h-full flex flex-col min-h-[400px]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-transparent">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
+    <div className="card flex flex-col max-h-[800px]">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6 shrink-0">
+        <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+          <span className="w-3 h-3 bg-primary shadow-hard-sm"></span>
+          Development Story
+        </h3>
+        {status === 'success' && (
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="text-xs border-none bg-surface-hover rounded-md text-text-secondary focus:ring-0 cursor-pointer py-1 pl-2 pr-6"
+            >
+              <option value="auto">Auto</option>
+              <option value="gemini_flash">Gemini Flash</option>
+              <option value="gemini_flash_lite">Flash Lite</option>
+              <option value="groq">Groq</option>
+            </select>
+            <button
+              onClick={() => fetchStory(true)}
+              disabled={status === 'loading'}
+              className="btn btn-secondary text-xs px-3 py-1.5"
+            >
+              {isStale ? "Generate Updated" : "Regenerate"}
+            </button>
           </div>
-          <div>
-            <h3 className="font-bold text-text-primary text-base">Development Story</h3>
-            <p className="text-xs text-text-tertiary">Chronological narrative of how the repository evolved over time</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {story && !loading && (
-            <>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="text-xs border-none bg-surface-hover rounded-md text-text-secondary focus:ring-0 cursor-pointer py-1 pl-2 pr-6"
-              >
-                <option value="auto">Auto</option>
-                <option value="gemini_flash">Gemini Flash</option>
-                <option value="gemini_flash_lite">Flash Lite</option>
-                <option value="groq">Groq</option>
-              </select>
-              <button
-                onClick={handleCopy}
-                title="Copy Story"
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-              >
-                {copied ? (
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                )}
-              </button>
-              <button
-                onClick={() => fetchStory(true)}
-                disabled={loading}
-                title={isStale ? "Generate Updated Analysis" : "Regenerate Story"}
-                className="px-2 py-1 text-xs rounded-lg bg-surface-hover border border-divider hover:bg-indigo-50 hover:text-indigo-600 transition-colors disabled:opacity-50"
-              >
-                {isStale ? "Generate Updated" : "Regenerate"}
-              </button>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Content */}
-      <div className={`flex-1 flex flex-col overflow-y-auto px-6 pb-6 pt-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-text-tertiary [&::-webkit-scrollbar-track]:bg-transparent ${!story ? 'justify-center' : 'justify-start'}`}>
-        {error && (
-          <div className="mb-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center justify-between">
-            <span>{error}</span>
+      <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+        {status === 'error' && (
+          <div className="mb-4 panel border-warning border-l-4">
+            <p className="font-bold text-warning mb-2">Failed to load Development Story</p>
+            <p className="text-sm text-text-secondary mb-4">{errorMsg}</p>
+            <button onClick={() => fetchStory(true)} className="btn btn-secondary text-xs">
+              Retry
+            </button>
           </div>
         )}
         
-        {loading && !story ? (
-          <div className="space-y-3 animate-pulse py-4">
-            <div className="h-4 bg-surface-hover rounded w-3/4"></div>
-            <div className="h-4 bg-surface-hover rounded w-full"></div>
-            <div className="h-4 bg-surface-hover rounded w-5/6"></div>
-            <div className="h-4 bg-surface-hover rounded w-2/3"></div>
-            <div className="text-center text-xs text-text-tertiary mt-4">Generating narrative...</div>
+        {status === 'loading' && (
+          <div className="space-y-6 animate-pulse-soft py-4">
+            <div className="h-16 bg-surface-raised border-2 border-border shadow-hard-sm w-full"></div>
+            <div className="h-32 bg-surface-raised border-2 border-border shadow-hard-sm w-full"></div>
+            <div className="h-32 bg-surface-raised border-2 border-border shadow-hard-sm w-full"></div>
+            <div className="text-xs font-bold text-text-tertiary mt-4 text-center">ANALYZING EVOLUTION...</div>
           </div>
-        ) : story ? (
-          <div className="flex flex-col h-full">
+        )}
+
+        {status === 'success' && story && (
+          <div className="flex flex-col gap-6">
             {isStale && (
-              <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between shrink-0">
-                <span className="text-sm text-amber-800">Analysis is outdated. The repository has new commits.</span>
+              <div className="panel border-warning bg-surface-raised flex items-center justify-between mb-2">
+                <span className="text-sm font-bold text-warning">Analysis is outdated (new commits found)</span>
                 <button
                   onClick={() => fetchStory(true)}
-                  disabled={loading}
-                  className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  disabled={status === 'loading'}
+                  className="btn btn-secondary text-xs px-2 py-1"
                 >
-                  Generate Updated Analysis
+                  Update
                 </button>
               </div>
             )}
-            <div className="prose prose-sm max-w-none text-text-secondary leading-relaxed bg-surface-hover/20 p-4 rounded-xl border border-divider/50 [&>p]:mb-3 [&>p:last-child]:mb-0 [&_strong]:text-indigo-600 [&_strong]:font-semibold flex-1">
-              <ReactMarkdown>{story}</ReactMarkdown>
-            </div>
+            
+            {story.overall_arc && (
+              <div className="panel bg-surface-hover/30 border-l-4 border-l-primary mb-4">
+                <h4 className="text-[10px] font-bold text-primary uppercase mb-2 tracking-wider">Overall Arc</h4>
+                <p className="text-sm text-text-primary leading-relaxed font-medium">
+                  {story.overall_arc}
+                </p>
+              </div>
+            )}
+
+            {story.phases && story.phases.length > 0 && (
+              <div className="space-y-6">
+                {story.phases.map((phase, idx) => (
+                  <div key={idx} className="card-flat flex flex-col gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-border pb-3">
+                      <h4 className="text-base font-bold text-text-primary">{phase.title}</h4>
+                      <span className="badge badge-primary bg-surface">{phase.period}</span>
+                    </div>
+                    
+                    {phase.narrative && (
+                      <p className="text-sm text-text-primary leading-relaxed">
+                        {phase.narrative}
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Evidence Container */}
+                      <div className="panel bg-surface p-4 flex flex-col gap-3">
+                        <h5 className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Evidence</h5>
+                        
+                        {phase.key_technologies && phase.key_technologies.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-semibold text-text-tertiary block mb-1">Technologies</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {phase.key_technologies.map(t => <span key={t} className="badge badge-info">{t}</span>)}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {phase.key_files && phase.key_files.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-semibold text-text-tertiary block mb-1">Files/Modules</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {phase.key_files.map(f => <span key={f} className="text-xs bg-surface-hover px-1.5 py-0.5 border border-border">{f}</span>)}
+                            </div>
+                          </div>
+                        )}
+
+                        {phase.key_contributors && phase.key_contributors.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-semibold text-text-tertiary block mb-1">Contributors</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {phase.key_contributors.map(c => <span key={c} className="text-xs font-semibold text-text-secondary">{c}</span>)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Significance Container */}
+                      {phase.significance && (
+                        <div className="panel bg-surface-raised border-primary p-4 h-full">
+                          <h5 className="text-[10px] font-bold text-primary uppercase tracking-wider mb-2">Significance</h5>
+                          <p className="text-sm text-text-primary leading-relaxed">
+                            {phase.significance}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(!story.phases || story.phases.length === 0) && !story.overall_arc && (
+              <div className="text-center py-10">
+                <p className="text-sm font-bold text-text-tertiary">No story phases detected.</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-10 text-center px-4 bg-surface-hover/20 rounded-xl border border-dashed border-divider">
-            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+        )}
+
+        {status === 'idle' && (
+          <div className="flex flex-col items-center justify-center py-10 gap-4 text-center px-4 panel border-dashed">
+            <div className="w-12 h-12 bg-surface-raised border-2 border-border flex items-center justify-center mb-2 shadow-hard-sm">
+               <span className="font-bold text-primary text-xl">~</span>
             </div>
-            <h4 className="text-text-primary font-medium mb-2">Generate Story</h4>
-            <p className="text-sm text-text-tertiary mb-6 max-w-sm">
-              Use AI to summarize the repository's commit history into a readable, chronological development story.
+            <div className="text-sm font-bold text-text-primary">
+              No development story generated yet.
+            </div>
+            <p className="text-xs text-text-secondary max-w-xs mb-2">
+              Transform commit history into a chronological narrative of how this repository was built.
             </p>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-text-tertiary">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="text-xs border border-divider bg-surface rounded-md text-text-secondary focus:ring-indigo-500 cursor-pointer py-1.5 pl-3 pr-8"
+                className="text-xs border border-divider bg-surface rounded-md text-text-secondary cursor-pointer py-1.5 pl-3 pr-8"
               >
                 <option value="auto">Auto (Recommended)</option>
                 <option value="gemini_flash">Gemini Flash</option>
@@ -156,13 +198,9 @@ export default function AIDevelopmentStory({ repoId }) {
             </div>
             <button
               onClick={() => fetchStory(true)}
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+              className="btn btn-primary"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Generate Analysis
+              Generate Story
             </button>
           </div>
         )}

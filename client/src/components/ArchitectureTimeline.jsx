@@ -1,71 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import React, { useState } from 'react';
 import { api } from '../lib/api';
 
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    const plainText = text.map(s => `[${s.date}] ${s.title}\n${s.description}`).join('\n\n');
-    await navigator.clipboard.writeText(plainText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      onClick={handleCopy}
-      title="Copy to clipboard"
-      className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-surface-hover transition-colors"
-    >
-      {copied ? (
-        <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-      ) : (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      )}
-    </button>
-  );
-}
-
 export default function ArchitectureTimeline({ repoId }) {
+  const [status, setStatus] = useState('idle'); // 'idle' | 'loading' | 'success' | 'error'
   const [shifts, setShifts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [generated, setGenerated] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [isStale, setIsStale] = useState(false);
   const [selectedModel, setSelectedModel] = useState('auto');
 
   const fetchShifts = async (force = false) => {
-    setLoading(true);
-    setError('');
+    if (status === 'loading') return;
+    setStatus('loading');
+    setErrorMsg('');
     try {
       const data = await api.getAIShifts(repoId, { model: selectedModel, force_refresh: force });
-      setShifts(data.shifts || []);
-      setIsStale(data.is_stale || false);
-      setGenerated(!!data.shifts);
+      
+      let parsedShifts = [];
+      if (data && data.shifts) {
+        // Backend could return `{"shifts": [...]}` or just `[...]` depending on LLM parsing
+        // If data.shifts is already an array, use it directly.
+        // If the LLM hallucinated and nested it like {"shifts": {"shifts": [...]}}, try to unwrap.
+        if (Array.isArray(data.shifts)) {
+          parsedShifts = data.shifts;
+        } else if (data.shifts && Array.isArray(data.shifts.shifts)) {
+          parsedShifts = data.shifts.shifts;
+        } else if (typeof data.shifts === 'string') {
+           try { parsedShifts = JSON.parse(data.shifts); } catch(e) {}
+        }
+        setShifts(parsedShifts);
+        setIsStale(data.is_stale || false);
+        setStatus('success');
+      } else {
+        setStatus('idle');
+      }
     } catch (err) {
-      setError(err.message || 'Failed to detect architecture shifts.');
-    } finally {
-      setLoading(false);
+      setErrorMsg(err.message || 'AI generation unavailable. Please try again.');
+      setStatus('error');
     }
   };
 
-  useEffect(() => {
-    fetchShifts(false);
-  }, [repoId, selectedModel]);
-
   return (
-    <div className="bg-surface rounded-xl shadow-sm border border-divider flex flex-col max-h-[500px]">
-      <div className="flex justify-between items-center px-6 pt-6 pb-4 shrink-0 border-b border-transparent">
-        <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
-          <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Architecture Shift Timeline
+    <div className="card flex flex-col max-h-[800px]">
+      <div className="flex flex-wrap justify-between items-start gap-4 mb-6 shrink-0">
+        <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
+          <span className="w-3 h-3 bg-info shadow-hard-sm"></span>
+          Architecture Shifts
         </h3>
-        {(generated || !!error) && (
+        {status === 'success' && (
           <div className="flex items-center gap-2">
             <select
               value={selectedModel}
@@ -77,76 +58,122 @@ export default function ArchitectureTimeline({ repoId }) {
               <option value="gemini_flash_lite">Flash Lite</option>
               <option value="groq">Groq</option>
             </select>
-            {shifts.length > 0 && <CopyButton text={shifts} />}
-            {shifts.length > 0 && (
-              <button
-                onClick={() => fetchShifts(true)}
-                disabled={loading}
-                title={isStale ? "Generate Updated Analysis" : "Regenerate Analysis"}
-                className="px-2 py-1 text-xs rounded-md bg-surface-hover border border-divider hover:bg-primary-50 hover:text-primary-600 transition-colors disabled:opacity-50"
-              >
-                {isStale ? "Generate Updated" : "Regenerate"}
-              </button>
-            )}
+            <button
+              onClick={() => fetchShifts(true)}
+              disabled={status === 'loading'}
+              className="btn btn-secondary text-xs px-3 py-1.5"
+            >
+              {isStale ? "Generate Updated" : "Regenerate"}
+            </button>
           </div>
         )}
       </div>
 
-      <div className="px-6 pb-6 pt-2 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-text-tertiary [&::-webkit-scrollbar-track]:bg-transparent">
-        {error && (
-          <div className="mb-4 bg-red-50 text-red-600 p-4 rounded-lg text-sm flex gap-3 items-start">
-            <svg className="w-5 h-5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>{error}</span>
+      <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+        {status === 'error' && (
+          <div className="mb-4 panel border-warning border-l-4">
+            <p className="font-bold text-warning mb-2">Failed to load Timeline</p>
+            <p className="text-sm text-text-secondary mb-4">{errorMsg}</p>
+            <button onClick={() => fetchShifts(true)} className="btn btn-secondary text-xs">
+              Retry
+            </button>
           </div>
         )}
         
-        {loading && shifts.length === 0 ? (
-          <div className="space-y-4 animate-pulse">
-            <div className="h-12 bg-surface-hover rounded w-full"></div>
-            <div className="h-12 bg-surface-hover rounded w-5/6"></div>
-            <div className="h-12 bg-surface-hover rounded w-4/5"></div>
+        {status === 'loading' && (
+          <div className="space-y-6 animate-pulse-soft py-4">
+            <div className="h-24 bg-surface-raised border-2 border-border shadow-hard-sm w-full"></div>
+            <div className="h-24 bg-surface-raised border-2 border-border shadow-hard-sm w-5/6 ml-auto"></div>
+            <div className="text-xs font-bold text-text-tertiary mt-4 text-center">ANALYZING ARCHITECTURE...</div>
           </div>
-        ) : shifts.length > 0 ? (
-          <div className="flex flex-col">
+        )}
+
+        {status === 'success' && shifts && (
+          <div className="flex flex-col gap-6 relative">
             {isStale && (
-              <div className="mb-4 mx-3 p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-between">
-                <span className="text-sm text-amber-800">Analysis is outdated. The repository has new commits.</span>
+              <div className="panel border-warning bg-surface-raised flex items-center justify-between mb-2">
+                <span className="text-sm font-bold text-warning">Analysis is outdated (new commits found)</span>
                 <button
                   onClick={() => fetchShifts(true)}
-                  disabled={loading}
-                  className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  disabled={status === 'loading'}
+                  className="btn btn-secondary text-xs px-2 py-1"
                 >
-                  Generate Updated Analysis
+                  Update
                 </button>
               </div>
             )}
-            <div className="relative border-l-2 border-divider ml-3 space-y-6">
-              {shifts.map((shift, index) => (
-                <div key={index} className="pl-6 relative">
-                  <div className="absolute w-3 h-3 bg-indigo-500 rounded-full -left-[7px] top-1.5 ring-4 ring-surface"></div>
-                  <div className="text-xs font-semibold text-indigo-500 mb-1">{shift.date}</div>
-                  <div className="font-bold text-text-primary mb-1">{shift.title}</div>
-                  <div className="text-sm text-text-secondary prose prose-sm max-w-none [&>p]:m-0 [&_strong]:text-text-primary [&_code]:bg-surface-hover [&_code]:px-1 [&_code]:rounded [&_code]:text-xs">
-                    <ReactMarkdown>{shift.description}</ReactMarkdown>
+            
+            {shifts.length === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-sm font-bold text-text-tertiary">No major architectural shifts detected.</p>
+              </div>
+            ) : (
+              <div className="relative border-l-[3px] border-border ml-4 space-y-8 pb-4">
+                {shifts.map((shift, idx) => (
+                  <div key={idx} className="pl-6 relative">
+                    <div className="absolute w-4 h-4 bg-info border-2 border-border -left-[10px] top-1"></div>
+                    <div className="mb-1">
+                      <span className="badge badge-info bg-surface text-info border-info">{shift.date}</span>
+                    </div>
+                    <h4 className="text-base font-bold text-text-primary mb-3">{shift.title}</h4>
+                    
+                    <div className="flex flex-col gap-4">
+                      {/* Evidence Block */}
+                      {(shift.what_changed || (shift.evidence_items && shift.evidence_items.length > 0)) && (
+                        <div className="panel bg-surface-hover/50 p-4 border-l-4 border-l-border border-t-0 border-r-0 border-b-0 shadow-none">
+                          <h5 className="text-[10px] font-bold text-text-secondary uppercase mb-2 tracking-wider">Evidence</h5>
+                          {shift.what_changed && (
+                            <p className="text-sm text-text-primary mb-3">
+                              {shift.what_changed}
+                            </p>
+                          )}
+                          {shift.evidence_items && shift.evidence_items.length > 0 && (
+                            <ul className="text-xs text-technical text-text-secondary space-y-1">
+                              {shift.evidence_items.map((item, i) => (
+                                <li key={i} className="flex gap-2">
+                                  <span className="text-border-subtle shrink-0">→</span>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Inference Block */}
+                      {shift.architectural_significance && (
+                        <div className="panel bg-surface-raised border-info border-l-4">
+                          <h5 className="text-[10px] font-bold text-info uppercase mb-2 tracking-wider">[INFERENCE] Significance</h5>
+                          <p className="text-sm text-text-primary leading-relaxed font-medium">
+                            {shift.architectural_significance}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {status === 'idle' && (
+          <div className="flex flex-col items-center justify-center py-10 gap-4 text-center px-4 panel border-dashed">
+            <div className="w-12 h-12 bg-surface-raised border-2 border-border flex items-center justify-center mb-2 shadow-hard-sm">
+               <span className="font-bold text-info text-xl">#</span>
             </div>
-          </div>
-        ) : generated ? (
-          <div className="text-center py-6 text-text-tertiary text-sm">
-            No clear architectural shifts found in the commit history.
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <div className="text-sm font-bold text-text-primary">
+              No timeline generated yet.
+            </div>
+            <p className="text-xs text-text-secondary max-w-xs mb-2">
+              Analyze commit history to discover major structural shifts and migrations over time.
+            </p>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs text-text-tertiary">Model:</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="text-xs border border-divider bg-surface rounded-md text-text-secondary focus:ring-primary-500 cursor-pointer py-1.5 pl-3 pr-8"
+                className="text-xs border border-divider bg-surface rounded-md text-text-secondary cursor-pointer py-1.5 pl-3 pr-8"
               >
                 <option value="auto">Auto (Recommended)</option>
                 <option value="gemini_flash">Gemini Flash</option>
@@ -154,22 +181,12 @@ export default function ArchitectureTimeline({ repoId }) {
                 <option value="groq">Groq Llama 3</option>
               </select>
             </div>
-            <div className="text-sm text-text-secondary mb-4 text-center">
-              No analysis has been generated for this repository yet.
-            </div>
             <button
               onClick={() => fetchShifts(true)}
-              disabled={loading}
-              className="group flex items-center gap-2 px-5 py-2.5 bg-surface-hover border border-divider rounded-xl hover:border-primary-300 hover:bg-primary-50 transition-all disabled:opacity-50"
+              className="btn btn-primary"
             >
-              <svg className="w-5 h-5 text-text-tertiary group-hover:text-primary-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-              </svg>
-              <span className="text-sm font-medium text-text-secondary group-hover:text-primary-600 transition-colors">
-                Generate Analysis
-              </span>
+              Analyze Architecture
             </button>
-            <p className="text-xs text-text-tertiary">Analyze commit history for major structural changes</p>
           </div>
         )}
       </div>

@@ -40,6 +40,7 @@
 │         ├── knowledge_model.py    ───▶ Stage 4 upsert RPC             │
 │         ├── evolution_analyzer.py ───▶ Stage 5 git/code correlation   │
 │         ├── phase_analyzer.py     ───▶ Stage 6 deterministic phases   │
+│         ├── evidence_assembler.py ───▶ Stage 7 deterministic evidence │
 │         └── miner.py              ───▶ Async Background Worker Task   │
 └──────────────────────────────────┬─────────────────────────────────────┘
                                    │ Database Requests / SQL RPCs
@@ -253,16 +254,13 @@ client/src/App.jsx ◀──(onAuthStateChange)── Supabase Auth Client
 
 ## 🎯 Current Execution Path Under Modification
 
-> **Active Task / Focus Area:** Stage 6 — Architecture Evolution Engine
+> **Active Task / Focus Area:** Stage 7 — Component 1: Repository Evidence Assembler
 > **Status:** ✅ Complete
 > **Modified Paths:**
-> - `server/supabase/migrations/011_architecture_phases.sql` — New `architecture_phases` table (phase metadata) and `architecture_phase_events` table (evidence mapping), with RLS and cascading FKs
-> - `server/app/services/phase_analyzer.py` — Stage 6 deterministic engine: `PHASE_GAP_DAYS=14` threshold, time-gap clustering, priority heuristic title generation, idempotent `analyze_phases()` entry point
-> - `server/app/services/miner.py` — Added `analyze_phases(repo_id)` call immediately after Stage 5 (`analyze_evolution`), inside isolated `try/except` block so Stage 6 failure cannot set repo to `error`
-> - `server/app/routers/ai.py` — Refactored `/shifts` endpoint to fetch `architecture_phases` + `architecture_phase_events` instead of raw `commits`; feeds structured evidence JSON to Stage 7 LLM
-> - `server/app/services/ai_service.py` — Updated `detect_architecture_shifts()` signature and prompt: now accepts `structured_phases: List[Dict]` instead of raw commits
-> - `server/tests/test_phase_analyzer.py` — Unit tests for clustering boundaries, deterministic titles, empty input, irrelevant event filtering (6 tests passing)
-> - `server/tests/test_miner.py` — Added `analyze_phases` to mock decorator chain for Stage 5 failure isolation test
+> - `server/app/services/evidence_assembler.py` — New service layer that builds a centralized `RepositoryEvidence` object containing technology fingerprint, architecture phases, hotspots, and contributors.
+> - `server/tests/test_evidence_assembler.py` — Comprehensive test suite for all deterministic pure functions (bus factor, tech deduplication, sampling).
+> - `server/verify_evidence.py` — Live test script against `x-algorithm` database state.
+> - Previous Stage 6 work is fully integrated and feeds into the assembler.
 
 ---
 

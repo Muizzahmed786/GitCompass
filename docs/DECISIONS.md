@@ -299,5 +299,16 @@ Whenever modifying, refactoring, or introducing new code/libraries to GitCompass
 - **Rationale:** Enforces the GitCompass principle: Stage 6 answers *what happened and when*; Stage 7 answers *what it means*. The LLM cannot hallucinate phase boundaries because they are provided as structured JSON facts.
 - **Trade-offs Accepted:** If a repository has zero `architecture_phases` (mined before Stage 6 was run), `/shifts` returns an error prompting re-mining.
 - **Affected Files / Flow:** [`routers/ai.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/routers/ai.py), [`services/ai_service.py`](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/ai_service.py)
+### [2026-08-21] - Stage 7: Centralized Deterministic Evidence Assembler
+
+- **Context / Problem:** Stage 7 AI reasoning features (Development Story, Architecture Timeline, AI Summary) previously fetched raw database records independently. This caused code duplication, led to N+1 queries, and hit URL length limits when generating evidence dynamically in the router.
+- **Options Considered:**
+  1. Have each AI feature construct its own context and evidence gathering logic.
+  2. Build a centralized, purely deterministic `EvidenceAssembler` that builds a single `RepositoryEvidence` object containing all required context (phases, hotspots, commit samples, technology).
+- **Decision:** Selected Option 2 (Centralized `EvidenceAssembler`).
+- **Rationale:** A single deterministic gathering layer eliminates code duplication, enables heavy optimization (avoiding N+1 queries by querying by `repo_id` and grouping in memory), and provides the LLM with a single unified data shape to reason over. The assembler is strictly deterministic—no LLM calls happen during assembly.
+- **Trade-offs Accepted:** Adds a heavy data aggregation step prior to LLM execution. To avoid memory bloat and "URI too long" errors, limits are placed on hotspots (top 10), contributors (top 5), and commit samples (top 30), relying on statistical percentile ranking rather than full histories.
+- **Affected Files / Flow:** `server/app/services/evidence_assembler.py`, `server/verify_evidence.py`
+
 
 

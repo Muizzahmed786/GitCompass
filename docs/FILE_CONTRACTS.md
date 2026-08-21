@@ -483,6 +483,20 @@ Whenever a file is added, modified, or refactored:
 
 ---
 
+## 🧩 Stage 7 — Evidence Assembler & AI Pipeline
+
+### [server/app/services/evidence_assembler.py](file:///c:/Users/mulla/Desktop/Projects/GitCompass/server/app/services/evidence_assembler.py)
+- **Role:** Stage 7 Component 1. A strictly deterministic data layer that collects and organizes repository facts from previous stages (1-6) into a centralized `RepositoryEvidence` structure. Contains NO calls to AI or external APIs.
+- **Inputs:**
+  - `assemble_evidence(repo_id: str, db)`: Takes a repository UUID and a Supabase DB client instance.
+- **Outputs / Side Effects:**
+  - Returns a `RepositoryEvidence` dictionary object.
+  - Dict contains keys: `repository` (metadata), `technology` (deduplicated fingerprint), `phases` (Stage 6 architecture phases + mapped events), `hotspots` (top 10 active files), `contributors` (commit stats + 80% bus factor), and `commit_sample` (top significant commits by 2σ percentile rank).
+  - Purely read-only; no database mutations.
+- **Error Handling:** Propagates underlying database exceptions. Missing optional data returns empty lists/dicts rather than raising errors.
+
+---
+
 ### Stage 6 → Stage 7 Data Contract (via `routers/ai.py` `/shifts` endpoint)
 
 - **What Stage 6 provides to Stage 7:**

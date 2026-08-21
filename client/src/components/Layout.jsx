@@ -81,8 +81,20 @@ export default function Layout({ children, user }) {
               <Link to={`/repository/${repoId}`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname === `/repository/${repoId}` ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Overview
               </Link>
+              <Link to={`/repository/${repoId}/evolution`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/evolution') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+                Evolution
+              </Link>
               <Link to={`/repository/${repoId}/architecture`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/architecture') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Architecture
+              </Link>
+              <Link to={`/repository/${repoId}/hotspots`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/hotspots') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+                Hotspots
+              </Link>
+              <Link to={`/repository/${repoId}/contributors`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/contributors') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+                Contributors
+              </Link>
+              <Link to={`/repository/${repoId}/ai`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/ai') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+                AI Insights
               </Link>
             </>
           )}
