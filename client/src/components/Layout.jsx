@@ -6,6 +6,7 @@ import { useTheme } from '../lib/ThemeContext';
 
 export default function Layout({ children, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarDesktopOpen, setSidebarDesktopOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const location = useLocation();
@@ -38,7 +39,7 @@ export default function Layout({ children, user }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[var(--color-surface)] flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[var(--color-surface)] flex flex-col md:flex-row relative">
       <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
       
       {/* ── Sidebar (Mobile Toggle) ───────────────────────── */}
@@ -53,11 +54,12 @@ export default function Layout({ children, user }) {
 
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-[var(--color-surface-raised)] border-r-2 border-[var(--color-border)] transform transition-transform duration-200 ease-in-out md:translate-x-0 md:static flex flex-col
+        fixed inset-y-0 left-0 z-40 w-64 bg-[var(--color-surface-raised)] border-r-2 border-[var(--color-border)] transform transition-all duration-300 ease-in-out flex flex-col shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        ${sidebarDesktopOpen ? 'md:translate-x-0 md:static' : 'md:-translate-x-full md:absolute md:opacity-0'}
       `}>
         {/* Brand */}
-        <div className="h-16 flex items-center px-6 border-b-2 border-[var(--color-border)]">
+        <div className="h-16 flex items-center justify-between px-6 border-b-2 border-[var(--color-border)]">
           <Link to="/dashboard" className="font-black text-xl tracking-tight uppercase flex items-center gap-2">
             <span className="w-6 h-6 bg-[var(--color-primary)] border-2 border-[var(--color-border)] inline-block shadow-[2px_2px_0px_#121212]"></span>
             GitCompass
@@ -65,45 +67,48 @@ export default function Layout({ children, user }) {
         </div>
 
         {/* Global Navigation */}
-        <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-1">
+        <div className="flex-1 overflow-y-auto py-6 flex flex-col gap-2">
+          
+          {/* Overview Section */}
           <div className="px-6 py-2 text-xs font-black uppercase text-[var(--color-text-tertiary)] tracking-widest">
             Overview
           </div>
-          <Link to="/dashboard" className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname === '/dashboard' ? 'border-[var(--color-primary)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+          <Link to="/dashboard" className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname === '/dashboard' ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
             Repositories
           </Link>
           
+          {/* Repository Section */}
           {isRepoContext && (
             <>
               <div className="px-6 py-2 mt-4 text-xs font-black uppercase text-[var(--color-text-tertiary)] tracking-widest">
                 Repository
               </div>
-              <Link to={`/repository/${repoId}`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname === `/repository/${repoId}` ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname === `/repository/${repoId}` ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Overview
               </Link>
-              <Link to={`/repository/${repoId}/evolution`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/evolution') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}/evolution`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname.includes('/evolution') ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Evolution
               </Link>
-              <Link to={`/repository/${repoId}/architecture`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/architecture') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}/architecture`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname.includes('/architecture') ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Architecture
               </Link>
-              <Link to={`/repository/${repoId}/hotspots`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/hotspots') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}/hotspots`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname.includes('/hotspots') ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Hotspots
               </Link>
-              <Link to={`/repository/${repoId}/contributors`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/contributors') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}/contributors`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname.includes('/contributors') ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 Contributors
               </Link>
-              <Link to={`/repository/${repoId}/ai`} className={`px-6 py-3 font-bold uppercase text-sm border-l-4 ${location.pathname.includes('/ai') ? 'border-[var(--color-info)] bg-[var(--color-surface)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
+              <Link to={`/repository/${repoId}/ai`} className={`pl-10 pr-6 py-3 font-bold uppercase text-sm border-l-4 transition-colors ${location.pathname.includes('/ai') ? 'border-[var(--color-info)] bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]' : 'border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)]'}`}>
                 AI Insights
               </Link>
             </>
           )}
 
           <div className="mt-auto pt-4 border-t-2 border-[var(--color-border)] px-4">
-            <button className="w-full text-left px-4 py-3 font-bold uppercase text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] flex items-center gap-3">
+            <button className="w-full text-left px-4 py-3 font-bold uppercase text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] flex items-center gap-3 transition-colors">
               Settings
             </button>
-            <button className="w-full text-left px-4 py-3 font-bold uppercase text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] flex items-center gap-3">
+            <button className="w-full text-left px-4 py-3 font-bold uppercase text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-hover)] flex items-center gap-3 transition-colors">
               Help
             </button>
           </div>
@@ -111,13 +116,24 @@ export default function Layout({ children, user }) {
       </aside>
 
       {/* ── Main Content Area ───────────────────────────── */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden w-full">
         
         {/* ── Top Navbar ──────────────────────────────── */}
-        <header className="h-16 bg-[var(--color-surface-raised)] border-b-2 border-[var(--color-border)] flex items-center justify-between px-6 shrink-0 sticky top-0 z-30">
+        <header className="h-16 bg-[var(--color-surface-raised)] border-b-2 border-[var(--color-border)] flex items-center justify-between px-6 shrink-0 sticky top-0 z-30 gap-4">
           
+          {/* Toggle Sidebar Button (Desktop) */}
+          <button 
+            className="hidden md:flex items-center justify-center w-10 h-10 border-2 border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] transition-all rounded shadow-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+            onClick={() => setSidebarDesktopOpen(!sidebarDesktopOpen)}
+            title="Toggle Sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="square" strokeLinejoin="miter" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
           {/* Global Search (Command Palette entry) */}
-          <div className="flex-1 max-w-md">
+          <div className="flex-1 max-w-md ml-auto md:ml-0">
             <button 
               onClick={() => setPaletteOpen(true)}
               className="w-full bg-[var(--color-surface)] border-2 border-[var(--color-border)] text-left px-4 py-2 text-sm text-[var(--color-text-secondary)] font-mono flex items-center justify-between hover:shadow-[2px_2px_0px_#121212] transition-shadow"

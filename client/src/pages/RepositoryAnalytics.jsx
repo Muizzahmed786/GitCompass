@@ -19,13 +19,11 @@ export default function RepositoryAnalytics() {
       const repoData = await api.get(`/api/repositories/${id}`);
       setRepo(repoData);
 
-      // Fetch lightweight data for previews
-      const [hotspotsData, summaryData, busFactorData, aiRes] = await Promise.all([
-        api.get(`/api/analytics/${id}/hotspots?limit=5`), // Lightweight request
-        api.get(`/api/analytics/${id}/summary`).catch(() => null),
-        api.get(`/api/analytics/${id}/bus-factor`).catch(() => null),
-        api.getAISummary(id, { force_refresh: false }).catch(() => null),
-      ]);
+      // Sequential fetch to prevent backend connection pool exhaustion
+      const summaryData = await api.get(`/api/analytics/${id}/summary`).catch(e => { console.error('Summary error', e); return null; });
+      const busFactorData = await api.get(`/api/analytics/${id}/bus-factor`).catch(e => { console.error('Bus factor error', e); return null; });
+      const hotspotsData = await api.get(`/api/analytics/${id}/hotspots`).catch(e => { console.error('Hotspots error', e); return null; });
+      const aiRes = await api.getAISummary(id, { force_refresh: false }).catch(e => { console.error('AI preview error', e); return null; });
 
       setHotspots(hotspotsData || []);
       setSummary(summaryData);
@@ -66,7 +64,7 @@ export default function RepositoryAnalytics() {
   if (!repo) return null;
 
   // Derive simple metrics
-  const activeHotspots = hotspots.filter(h => !h.is_deleted);
+  const activeHotspots = (hotspots || []).filter(h => !h.is_deleted);
   const topActive = activeHotspots.slice(0, 5); // Take top 5 for preview
   const topContributors = Object.entries(busFactor?.top_contributors || {}).slice(0, 3);
   const isHealthy = busFactor && busFactor.repo_bus_factor > 4;
@@ -142,18 +140,18 @@ export default function RepositoryAnalytics() {
           </Link>
         </div>
 
-        <div className="card flex flex-col justify-between p-8 bg-[var(--color-special)] text-white border-2 border-[var(--color-border)] shadow-hard">
+        <div className="card flex flex-col justify-between p-8 border-2 border-[var(--color-border)] shadow-hard">
           <div>
-            <h2 className="text-sm font-black uppercase tracking-widest text-white/80 mb-4">AI Summary Preview</h2>
-            <div className="text-lg font-medium leading-relaxed mb-8">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[var(--color-text-tertiary)] mb-4">AI Summary Preview</h2>
+            <div className="text-lg font-medium leading-relaxed mb-8 text-[var(--color-text-primary)]">
               {truncatedAI ? (
                 <span>{truncatedAI}</span>
               ) : (
-                <span className="text-white/90 italic">AI insights haven't been generated yet.</span>
+                <span className="text-[var(--color-text-secondary)] italic">AI insights haven't been generated yet.</span>
               )}
             </div>
           </div>
-          <Link to={`/repository/${id}/ai`} className="btn bg-white text-[#121212] hover:bg-gray-100 border-2 border-[#121212] self-start w-full sm:w-auto shadow-[2px_2px_0px_#121212]">
+          <Link to={`/repository/${id}/ai`} className="btn btn-secondary self-start w-full sm:w-auto">
             {truncatedAI ? "Read Full AI Summary →" : "Explore AI Insights →"}
           </Link>
         </div>
