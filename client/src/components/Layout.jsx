@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { Link, useLocation } from 'react-router-dom';
 import CommandPalette from './search/CommandPalette';
 import { useTheme } from '../lib/ThemeContext';
+import AIChatDrawer from './AIChatDrawer';
 
 export default function Layout({ children, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarDesktopOpen, setSidebarDesktopOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
 
@@ -145,7 +147,20 @@ export default function Layout({ children, user }) {
 
           {/* User & Actions */}
           <div className="flex items-center gap-6 ml-4">
-            
+            {/* Ask AI Button (Repo Context Only) */}
+            {isRepoContext && (
+              <button 
+                onClick={() => setChatDrawerOpen(true)}
+                className="hidden sm:flex items-center gap-2 bg-[var(--color-primary)] text-[#121212] border-2 border-[var(--color-border)] px-4 py-2 font-black uppercase text-sm hover:bg-[#E2FF32] transition-colors shadow-[2px_2px_0px_#121212] hover:shadow-[4px_4px_0px_#121212] mr-2"
+                title="Ask GitCompass AI"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="square" strokeLinejoin="miter" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                Ask AI
+              </button>
+            )}
+
             {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
@@ -232,6 +247,11 @@ export default function Layout({ children, user }) {
         </main>
       </div>
 
+      <AIChatDrawer 
+        isOpen={chatDrawerOpen} 
+        onClose={() => setChatDrawerOpen(false)} 
+        repoId={repoId} 
+      />
     </div>
   );
 }

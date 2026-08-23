@@ -324,27 +324,26 @@ def _build_technology_fingerprint(db, repo_id: str) -> Dict[str, List[str]]:
             if not name:
                 continue
 
-            # Use stored category if meaningful, else classify by name
-            if "framework" in category or "ui" in category:
+            # Priority 1: Exact keyword match using our hardcoded taxonomy
+            classified = _classify_dependency(name)
+            if classified == "framework":
                 frameworks.add(name)
-            elif "runtime" in category or "server" in category:
+            elif classified == "runtime":
                 runtimes.add(name)
-            elif "database" in category or "db" in category or "orm" in category:
+            elif classified == "database":
                 databases.add(name)
-            elif "infrastructure" in category or "devops" in category or "ci" in category:
+            elif classified == "infrastructure":
                 infrastructure.add(name)
             else:
-                # Fallback to keyword classification
-                classified = _classify_dependency(name)
-                if classified == "framework":
+                # Priority 2: Use the stored category from static analysis
+                if "framework" in category or "ui" in category:
                     frameworks.add(name)
-                elif classified == "runtime":
+                elif "runtime" in category or "server" in category:
                     runtimes.add(name)
-                elif classified == "database":
+                elif "database" in category or "db" in category or "orm" in category:
                     databases.add(name)
-                elif classified == "infrastructure":
+                elif "infrastructure" in category or "devops" in category or "ci" in category:
                     infrastructure.add(name)
-                # If unclassified, we do NOT add it to avoid noise
     except Exception as exc:
         logger.warning("[EvidenceAssembler] Failed to query repository_dependencies: %s", exc)
 
@@ -724,7 +723,7 @@ def _resolve_primary_language(db, repo_id: str) -> Optional[str]:
                 return str(lang)
             # Fall back to the first entry of languages list
             languages = structure.get("languages", [])
-            if languages and isinstance(languages, list):
+            if isinstance(languages, list) and len(languages) > 0:
                 return str(languages[0])
     except Exception as exc:
         logger.warning("[EvidenceAssembler] Could not resolve primary language: %s", exc)

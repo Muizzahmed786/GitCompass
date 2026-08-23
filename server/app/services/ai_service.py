@@ -225,18 +225,15 @@ Rules:
 5. Never claim developer motivation unless evidence supports it.
 6. If motivation or significance is reasonably inferred, label it [INFERENCE].
 7. If the evidence is insufficient to explain something, say [UNKNOWN].
-8. Prefer concrete repository entities over generic language.
-9. Prefer specific files, directories, technologies, phases, and dates.
-10. Do not repeat statistics without explaining their engineering significance.
-11. Do not produce generic statements that could describe any repository.
-12. Do not invent causal relationships between unrelated events.
-13. Treat Stage 5 and Stage 6 deterministic data as authoritative.
-14. Stage 6 phase boundaries must never be changed by you.
-15. If large_change events exist without clear architectural meaning, do not invent an explanation; state [UNKNOWN].
-
-Return ONLY valid JSON.
-Do not wrap the response in markdown fences.
-Do not add commentary before or after the JSON.
+8. If the user makes an assumption or statement that contradicts the evidence, explicitly correct them.
+9. Prefer concrete repository entities over generic language.
+10. Prefer specific files, directories, technologies, phases, and dates.
+11. Do not repeat statistics without explaining their engineering significance.
+12. Do not produce generic statements that could describe any repository.
+13. Do not invent causal relationships between unrelated events.
+14. Treat Stage 5 and Stage 6 deterministic data as authoritative.
+15. Stage 6 phase boundaries must never be changed by you.
+16. If large_change events exist without clear architectural meaning, do not invent an explanation; state [UNKNOWN].
 """
 
 def _extract_json(text: str, is_array: bool = False) -> str:
@@ -297,6 +294,10 @@ Return a JSON object with exactly this schema:
   ],
   "onboarding_notes": "Important things a new developer should understand first. Use [UNKNOWN] if evidence is insufficient."
 }}
+
+Return ONLY valid JSON.
+Do not wrap the response in markdown fences.
+Do not add commentary before or after the JSON.
 """
     try:
         result = await generate_ai_response(
@@ -353,6 +354,10 @@ Return a JSON array of objects. Each object must have exactly these keys:
     "String items directly from the evidence (e.g. 'dependency_added: fastapi')"
   ]
 }}
+
+Return ONLY valid JSON.
+Do not wrap the response in markdown fences.
+Do not add commentary before or after the JSON.
 """
     try:
         result = await generate_ai_response(
@@ -375,17 +380,41 @@ Return a JSON array of objects. Each object must have exactly these keys:
         raise ValueError(f"Failed to detect architectural shifts: {exc}")
 
 
-async def answer_qa(repo_name: str, question: str, context_summary: str, selected_model: str = "auto") -> str:
-    """Answers user queries about the repository using context."""
-    system_prompt = f"You are a technical assistant for the repository '{repo_name}'."
+async def answer_qa(repo_name: str, history: List[Dict[str, str]], evidence: dict, selected_model: str = "auto") -> str:
+    """Answers a Q&A question using the repository evidence and conversation history."""
+    compact_evidence = json.dumps({
+        "evidence_status": evidence.get("evidence_status", "unknown"),
+        "repository": evidence.get("repository"),
+        "phases": evidence.get("phases"),
+        "hotspots": evidence.get("hotspots"),
+        "technology": evidence.get("technology"),
+        "contributors": evidence.get("contributors"),
+    }, separators=(',', ':'))
+
+    system_prompt = REPOSITORY_INTELLIGENCE_PROMPT
     
-    user_prompt = f"""Repository context (from Git history analysis):
-{context_summary}
+    # Format the conversation history string
+    history_str = ""
+    for msg in history[:-1]:
+        role_label = "Developer" if msg["role"] == "user" else "Analyst"
+        history_str += f"{role_label}: {msg['content']}\n\n"
+    
+    current_question = history[-1]["content"] if history else ""
 
-Developer's question: {question}
+    user_prompt = f"""You are answering a question about the repository '{repo_name}'.
 
-Answer directly based on the available data. If the data doesn't support a definitive answer, say so clearly and briefly. 
-Keep your answer concise and technical. Use markdown for formatting where it helps readability (e.g. bold file names, code blocks for paths).
+REPOSITORY EVIDENCE (JSON):
+{compact_evidence}
+
+CONVERSATION HISTORY:
+{history_str if history_str else "No previous history."}
+
+CURRENT QUESTION:
+{current_question}
+
+Answer directly based ONLY on the available repository evidence.
+If `evidence_status` is "unavailable", you MUST explicitly state that repository evidence could not be retrieved and refuse to answer repository-specific questions.
+If the evidence doesn't support a definitive answer, clearly state that the evidence does not establish it. DO NOT fabricate historical reasons, file names, or architectural choices. Distinguish clearly between concrete facts and your own inferences. Keep your answer concise, technical, and use markdown for readability.
 """
     try:
         result = await generate_ai_response(
@@ -432,11 +461,15 @@ Return a JSON object with exactly this schema:
       "key_files": ["files present in evidence"],
       "key_technologies": ["technologies supported by evidence"],
       "key_contributors": ["contributors supported by evidence"],
-      "significance": "FACT: what evidence shows [INFERENCE] what this likely means"
+      "description": "Narrative paragraph explaining what actually happened in this phase and its engineering significance."
     }}
   ],
   "overall_arc": "One concise paragraph explaining the repository's overall evolution."
 }}
+
+Return ONLY valid JSON.
+Do not wrap the response in markdown fences.
+Do not add commentary before or after the JSON.
 """
     try:
         result = await generate_ai_response(

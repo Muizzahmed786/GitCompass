@@ -8,7 +8,7 @@ from enum import Enum
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, List, Dict
 
 from app.dependencies import CurrentUser, UserDB
 from app.services.ai_service import (
@@ -41,8 +41,12 @@ class AISummaryResponse(BaseModel):
     is_cached: bool = False
     is_stale: bool = False
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
-    question: str
+    history: List[ChatMessage]
 
 class ChatResponse(BaseModel):
     answer: str
@@ -154,34 +158,43 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, p
 
 @router.post("/chat/{repo_id}", response_model=ChatResponse)
 async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUser, db: UserDB):
-    """Answers Q&A questions about the repository (Ephemeral, not cached)."""
+    """Answers Q&A questions about the repository using its evidence model."""
     try:
-        repo_res = db.table("repositories").select("name, total_commits").eq("id", repo_id).execute()
+        # Validate history size to prevent excessively large prompts
+        if len(payload.history) > 20:
+            raise HTTPException(status_code=400, detail="Conversation history too large (max 20 messages)")
+            
+        # Ensure all roles are valid and bounded
+        total_history_len = 0
+        for msg in payload.history:
+            if msg.role not in ("user", "assistant"):
+                raise HTTPException(status_code=400, detail="Invalid message role")
+            if not msg.content.strip():
+                raise HTTPException(status_code=400, detail="Message content cannot be empty")
+            if len(msg.content) > 2000:
+                raise HTTPException(status_code=400, detail="Individual message exceeds 2000 characters")
+            total_history_len += len(msg.content)
+            
+        if total_history_len > 20000:
+            raise HTTPException(status_code=400, detail="Total conversation history exceeds 20000 characters")
+
+        repo_res = db.table("repositories").select("name").eq("id", repo_id).execute()
         if not repo_res.data:
             raise HTTPException(status_code=404, detail="Repository not found")
 
         repo_name = repo_res.data[0].get("name") or "Unknown"
-        total_commits = repo_res.data[0].get("total_commits", 0)
 
-        # Build context from top files
-        hotspots_raw = (
-            db.table("file_diffs")
-            .select("file_path")
-            .eq("repo_id", repo_id)
-            .limit(1000)
-            .execute()
-        )
+        # Assemble authoritative evidence
+        try:
+            evidence = assemble_evidence(repo_id, db)
+            evidence["evidence_status"] = "available"
+        except Exception as e:
+            logger.warning("Failed to assemble complete evidence for chat: %s", e)
+            evidence = {"evidence_status": "unavailable"}
 
-        file_counts = defaultdict(int)
-        for row in (hotspots_raw.data or []):
-            file_counts[row["file_path"]] += 1
-
-        top_files = sorted(file_counts.items(), key=lambda x: x[1], reverse=True)[:15]
-        context = f"Repository: '{repo_name}', {total_commits} total commits\n"
-        context += "Most frequently changed files:\n"
-        context += "\n".join(f"- {f} ({c} commits)" for f, c in top_files)
-
-        answer_text = await answer_qa(repo_name, payload.question, context)
+        history_dicts = [{"role": msg.role, "content": msg.content} for msg in payload.history]
+        
+        answer_text = await answer_qa(repo_name, history_dicts, evidence)
         return {"answer": answer_text}
 
     except HTTPException:

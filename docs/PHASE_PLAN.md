@@ -127,7 +127,7 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - **Implementation:** `server/app/services/phase_analyzer.py`, `server/supabase/migrations/011_architecture_phases.sql`
 
 ### Stage 7 — AI Reasoning Layer
-**Status:** 🔴 High Priority (Next Stage)
+**Status:** ✅ Complete
 **Goal:** Introduce the LLM as a reasoning engine over the structured Evolution Model.
 - Feed the deterministic evidence and Repository Knowledge Model to the LLM.
 - Infer likely motivations behind the collected evidence.
@@ -135,7 +135,7 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - **Critical Constraint:** Explicitly distinguish factual evidence from AI inferences.
 
 ### Stage 8 — Repository Q&A
-**Status:** 🟠 Medium Priority
+**Status:** 🔴 High Priority (Next Stage)
 **Goal:** Context-aware conversational interface.
 - Retrieve specific slices of the Knowledge Model (e.g., dependency graph + commit history for a specific file).
 - Use the LLM to synthesize highly accurate, context-rich answers to user queries (e.g., "Why was Redis introduced here?").
