@@ -50,15 +50,32 @@ export default function RepositoryAIInsights() {
           </svg>
           Back to Overview
         </Link>
-        <h1 className="text-2xl font-bold text-text-primary tracking-tight">
-          {repo.name || repo.github_url} — AI Insights
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+            {repo.name || repo.github_url} — AI Insights
+          </h1>
+          <span className="badge badge-special text-[10px]">Beta</span>
+        </div>
         <p className="mt-1 text-sm text-text-secondary">
           Deep architectural reasoning and summaries
         </p>
+        
+        <div className="mt-6 p-4 bg-[var(--color-surface-raised)] border-2 border-[var(--color-border)] shadow-[4px_4px_0px_var(--color-border)] flex items-start gap-4 max-w-3xl">
+          <div className="text-[var(--color-special)] mt-1">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+               <path strokeLinecap="square" strokeLinejoin="miter" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-black uppercase text-sm tracking-wider mb-1">Feature in Development</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
+              This feature is still in active development. AI-generated results may not be perfectly consistent yet, and many more features are yet to come!
+            </p>
+          </div>
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-2">
+      <div className="grid grid-cols-1">
         <AISummaryCard repoId={id} />
       </div>
     </div>

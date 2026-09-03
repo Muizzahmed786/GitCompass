@@ -43,6 +43,14 @@ export default function LandingPage() {
         </div>
       </nav>
 
+      {/* Beta Notice Banner */}
+      <div className="bg-[var(--color-special)] text-white px-6 py-3 border-b-[var(--border-width)] border-[var(--color-border)] flex flex-col sm:flex-row items-center justify-center gap-3 z-40 relative">
+        <span className="bg-[#121212] text-white px-2 py-1 text-xs font-black uppercase tracking-widest shrink-0">BETA</span>
+        <p className="text-sm font-bold uppercase tracking-wider text-center">
+          GitCompass is in active development. Results may not be perfectly consistent yet, and many more features are on the way!
+        </p>
+      </div>
+
       {/* Hero Section */}
       <section className="max-w-7xl mx-auto px-6 py-24 grid md:grid-cols-2 gap-12 items-center border-b-[var(--border-width)] border-[var(--color-border)]">
         <div>

@@ -7,16 +7,27 @@ from collections import defaultdict
 from enum import Enum
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Optional
+import re
 
 from app.dependencies import CurrentUser, UserDB
+from app.schemas.ai import (
+    AIModelChoice,
+    AIRequest,
+    AISummaryResponse,
+    ChatMessage,
+    ChatRequest,
+    Citation,
+    ChatResponse,
+)
 from app.services.ai_service import (
     generate_evolution_summary,
     detect_architecture_shifts,
     answer_qa,
     generate_development_story,
 )
+from app.services.ai_cache import check_cache, save_cache
+from app.services.chat_retrieval import resolve_chat_evidence
 from app.services.evidence_assembler import assemble_evidence
 from datetime import datetime
 
@@ -24,32 +35,6 @@ from datetime import datetime
 logger = logging.getLogger("gitcompass.routers.ai")
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
-
-
-class AIModelChoice(str, Enum):
-    auto = "auto"
-    gemini_flash = "gemini_flash"
-    gemini_flash_lite = "gemini_flash_lite"
-    groq = "groq"
-
-class AIRequest(BaseModel):
-    model: AIModelChoice = AIModelChoice.auto
-    force_refresh: bool = False
-
-class AISummaryResponse(BaseModel):
-    summary: Any = None
-    is_cached: bool = False
-    is_stale: bool = False
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatRequest(BaseModel):
-    history: List[ChatMessage]
-
-class ChatResponse(BaseModel):
-    answer: str
 
 
 @router.post("/summary/{repo_id}", response_model=AISummaryResponse)
@@ -68,14 +53,9 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
         force_refresh = payload.force_refresh if payload else False
 
         if not force_refresh:
-            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "summary").eq("model", selected_model).execute()
-            if not cache_res.data:
-                return {"summary": None, "is_cached": False, "is_stale": False}
-            
-            cached_content = cache_res.data[0]["content"]
-            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
-            
-            return {"summary": cached_content, "is_cached": True, "is_stale": is_stale}
+            hit, cached = check_cache(db, repo_id, "summary", selected_model, latest_sha, force_refresh)
+            if hit:
+                return cached
 
         evidence = assemble_evidence(repo_id, db)
 
@@ -85,14 +65,7 @@ async def get_ai_summary(repo_id: str, user: CurrentUser, db: UserDB, payload: A
             selected_model=selected_model
         )
         
-        # Save to cache
-        db.table("ai_analysis_cache").upsert({
-            "repo_id": repo_id,
-            "analysis_type": "summary",
-            "model": selected_model,
-            "latest_sha": latest_sha,
-            "content": summary_data
-        }, on_conflict="repo_id,analysis_type,model").execute()
+        save_cache(db, repo_id, "summary", selected_model, latest_sha, summary_data)
 
         return {"summary": summary_data}
 
@@ -119,14 +92,9 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, p
         force_refresh = payload.force_refresh if payload else False
 
         if not force_refresh:
-            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "shifts").eq("model", selected_model).execute()
-            if not cache_res.data:
-                return {"shifts": None, "is_cached": False, "is_stale": False}
-            
-            cached_content = cache_res.data[0]["content"]
-            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
-            
-            return {"shifts": cached_content, "is_cached": True, "is_stale": is_stale}
+            hit, cached = check_cache(db, repo_id, "shifts", selected_model, latest_sha, force_refresh)
+            if hit:
+                return cached
 
         evidence = assemble_evidence(repo_id, db)
 
@@ -136,14 +104,7 @@ async def get_architecture_shifts(repo_id: str, user: CurrentUser, db: UserDB, p
             selected_model=selected_model
         )
         
-        # Save to cache
-        db.table("ai_analysis_cache").upsert({
-            "repo_id": repo_id,
-            "analysis_type": "shifts",
-            "model": selected_model,
-            "latest_sha": latest_sha,
-            "content": shifts
-        }, on_conflict="repo_id,analysis_type,model").execute()
+        save_cache(db, repo_id, "shifts", selected_model, latest_sha, shifts)
 
         return {"shifts": shifts}
 
@@ -192,10 +153,27 @@ async def ask_chat_assistant(repo_id: str, payload: ChatRequest, user: CurrentUs
             logger.warning("Failed to assemble complete evidence for chat: %s", e)
             evidence = {"evidence_status": "unavailable"}
 
+        specific_slice, supplied_paths = resolve_chat_evidence(db, repo_id, evidence, payload.history, payload.page_context)
+
         history_dicts = [{"role": msg.role, "content": msg.content} for msg in payload.history]
         
-        answer_text = await answer_qa(repo_name, history_dicts, evidence)
-        return {"answer": answer_text}
+        # Pass page_context and specific_slice down
+        qa_result = await answer_qa(
+            repo_name=repo_name,
+            history=history_dicts,
+            evidence=evidence,
+            page_context=payload.page_context,
+            specific_slice=specific_slice
+        )
+        
+        # Citation Validation
+        validated_citations = []
+        for cit in qa_result.get("citations", []):
+            cit_path = cit.get("path")
+            if cit.get("type") == "file" and cit_path in supplied_paths:
+                validated_citations.append(Citation(type="file", path=cit_path))
+                
+        return ChatResponse(answer=qa_result.get("answer", ""), citations=validated_citations)
 
     except HTTPException:
         raise
@@ -219,14 +197,9 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, pay
         force_refresh = payload.force_refresh if payload else False
 
         if not force_refresh:
-            cache_res = db.table("ai_analysis_cache").select("content, latest_sha").eq("repo_id", repo_id).eq("analysis_type", "story").eq("model", selected_model).execute()
-            if not cache_res.data:
-                return {"story": None, "is_cached": False, "is_stale": False}
-            
-            cached_content = cache_res.data[0]["content"]
-            is_stale = (cache_res.data[0].get("latest_sha") != latest_sha)
-            
-            return {"story": cached_content, "is_cached": True, "is_stale": is_stale}
+            hit, cached = check_cache(db, repo_id, "story", selected_model, latest_sha, force_refresh)
+            if hit:
+                return cached
 
         evidence = assemble_evidence(repo_id, db)
 
@@ -236,14 +209,7 @@ async def get_development_story(repo_id: str, user: CurrentUser, db: UserDB, pay
             selected_model=selected_model
         )
         
-        # Save to cache
-        db.table("ai_analysis_cache").upsert({
-            "repo_id": repo_id,
-            "analysis_type": "story",
-            "model": selected_model,
-            "latest_sha": latest_sha,
-            "content": story_data
-        }, on_conflict="repo_id,analysis_type,model").execute()
+        save_cache(db, repo_id, "story", selected_model, latest_sha, story_data)
 
         return {"story": story_data}
 

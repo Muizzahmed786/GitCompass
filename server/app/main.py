@@ -14,7 +14,6 @@ import logging
 from fastapi import FastAPI
 
 from app.config import settings
-from app.routers import health, repositories, analytics
 
 # ── Logging ───────────────────────────────────────────────────
 

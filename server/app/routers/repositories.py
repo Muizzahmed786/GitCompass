@@ -131,21 +131,26 @@ async def get_repository(repo_id: str, user: CurrentUser, db: UserDB):
         )
 
 
-@router.delete("/{repo_id}")
-async def delete_repository(repo_id: str, user: CurrentUser, db: UserDB):
+
+@router.delete("/{repo_id}", status_code=status.HTTP_202_ACCEPTED)
+async def delete_repository(repo_id: str, background_tasks: BackgroundTasks, user: CurrentUser, db: UserDB):
     """Delete a repository and its mined data."""
     try:
-        res = db.table("repositories").delete().eq("id", repo_id).execute()
+        res = db.table("repositories").select("id").eq("id", repo_id).execute()
         if not res.data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Repository {repo_id} not found",
             )
-        return {"status": "deleted", "id": repo_id}
+            
+        db.table("repositories").update({"status": "deleting", "mining_progress": 0}).eq("id", repo_id).execute()
+        background_tasks.add_task(delete_repo_background, repo_id, db)
+        
+        return {"status": "deleting", "id": repo_id}
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error("Failed to delete repository %s: %s", repo_id, exc)
+        logger.error("Failed to initiate deletion for repository %s: %s", repo_id, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error deleting repository: {exc}",

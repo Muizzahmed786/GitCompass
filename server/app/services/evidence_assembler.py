@@ -410,15 +410,18 @@ def _build_phases(db, repo_id: str) -> List[Dict[str, Any]]:
 
     phase_ids = [p["id"] for p in phase_rows]
 
-    # Step 2: Load all phase-event mappings in one query.
-    # phase_ids is bounded by the number of phases (typically <20), so in_() is safe here.
-    mappings_res = (
-        db.table("architecture_phase_events")
-        .select("phase_id, event_id")
-        .in_("phase_id", phase_ids)
-        .execute()
-    )
-    mappings = mappings_res.data or []
+    # Step 2: Load all phase-event mappings in chunks to avoid URI too long (414)
+    mappings = []
+    chunk_size = 15
+    for i in range(0, len(phase_ids), chunk_size):
+        chunk = phase_ids[i:i + chunk_size]
+        mappings_res = (
+            db.table("architecture_phase_events")
+            .select("phase_id, event_id")
+            .in_("phase_id", chunk)
+            .execute()
+        )
+        mappings.extend(mappings_res.data or [])
 
     # Build: phase_id → list of event_ids
     phase_to_event_ids: Dict[str, List[str]] = defaultdict(list)
@@ -650,17 +653,20 @@ def _build_commit_sample(db, repo_id: str) -> List[Dict[str, Any]]:
 
     commit_ids = [c["id"] for c in commits]
 
-    # Step 2: Load file paths for those commits in one query
-    diffs_res = (
-        db.table("file_diffs")
-        .select("commit_id, file_path")
-        .eq("repo_id", repo_id)
-        .in_("commit_id", commit_ids)
-        .execute()
-    )
+    # Step 2: Load file paths for those commits in chunks to avoid URI too long (414)
     files_by_commit: Dict[str, List[str]] = defaultdict(list)
-    for row in (diffs_res.data or []):
-        files_by_commit[row["commit_id"]].append(row["file_path"])
+    chunk_size = 15
+    for i in range(0, len(commit_ids), chunk_size):
+        chunk = commit_ids[i:i + chunk_size]
+        diffs_res = (
+            db.table("file_diffs")
+            .select("commit_id, file_path")
+            .eq("repo_id", repo_id)
+            .in_("commit_id", chunk)
+            .execute()
+        )
+        for row in (diffs_res.data or []):
+            files_by_commit[row["commit_id"]].append(row["file_path"])
 
     # Step 3: Compute churn percentile map
     churn_values = [(c.get("insertions", 0) + c.get("deletions", 0)) for c in commits]
@@ -835,3 +841,63 @@ def assemble_evidence(repo_id: str, db) -> Dict[str, Any]:
         len(technology["databases"]),
     )
     return evidence
+
+
+def retrieve_repository_slice(repo_id: str, target: str, db) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves specific evidence for a target file.
+    Validates that the target exists in the repository.
+    Returns None if the file is not found or does not belong to the repo.
+    """
+    try:
+        # Validate existence in repository_source_files (enforces repo_id authorization)
+        file_res = db.table("repository_source_files").select("language, imports, classes, functions").eq("repo_id", repo_id).eq("file_path", target).execute()
+        if not file_res.data:
+            return None # File not found in this repo
+            
+        file_data = file_res.data[0]
+        
+        # Get recent commit history for this file (limit 15)
+        diff_res = db.table("file_diffs").select("insertions, deletions, is_rename, old_path, commits!inner(author_name, message, committed_at, commit_type)").eq("repo_id", repo_id).eq("file_path", target).execute()
+        
+        # Sort manually since inner join order might be complex in PostgREST
+        diffs = diff_res.data or []
+        diffs.sort(key=lambda x: x.get("commits", {}).get("committed_at", ""), reverse=True)
+        diffs = diffs[:15]
+        
+        recent_commits = []
+        total_insertions = 0
+        total_deletions = 0
+        
+        for row in diffs:
+            c = row.get("commits", {})
+            recent_commits.append({
+                "author": c.get("author_name"),
+                "date": _normalize_date(c.get("committed_at")),
+                "type": c.get("commit_type"),
+                "message": c.get("message"),
+                "insertions": row.get("insertions", 0),
+                "deletions": row.get("deletions", 0),
+                "is_rename": row.get("is_rename", False),
+                "old_path": row.get("old_path")
+            })
+            total_insertions += row.get("insertions", 0)
+            total_deletions += row.get("deletions", 0)
+            
+        return {
+            "type": "file",
+            "path": target,
+            "language": file_data.get("language"),
+            "imports": file_data.get("imports", []),
+            "classes": file_data.get("classes", []),
+            "functions": file_data.get("functions", []),
+            "recent_commits": recent_commits,
+            "churn": {
+                "recent_commits_count": len(recent_commits),
+                "recent_insertions": total_insertions,
+                "recent_deletions": total_deletions
+            }
+        }
+    except Exception as exc:
+        logger.error("[EvidenceAssembler] Failed to retrieve specific slice for %s: %s", target, exc)
+        return None

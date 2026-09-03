@@ -1,7 +1,12 @@
+"""
+Evolution router — provides endpoints for repository evolution events and file lifecycle history.
+"""
+
 import logging
 from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
-from app.dependencies import get_db, get_current_user
+from fastapi import APIRouter, HTTPException, Query
+
+from app.dependencies import CurrentUser, UserDB
 
 logger = logging.getLogger("gitcompass.api.evolution")
 router = APIRouter(prefix="/api/repositories/{repo_id}/evolution", tags=["Evolution"])
@@ -11,8 +16,8 @@ async def get_evolution_events(
     repo_id: str,
     limit: int = Query(100, le=1000),
     offset: int = 0,
-    user_id: str = Depends(get_current_user),
-    db=Depends(get_db)
+    user: CurrentUser = None,
+    db: UserDB = None,
 ):
     """Retrieves deterministic historical evolution events for a repository."""
     try:
@@ -26,8 +31,8 @@ async def get_evolution_events(
 async def get_file_evolution(
     repo_id: str,
     file_path: str,
-    user_id: str = Depends(get_current_user),
-    db=Depends(get_db)
+    user: CurrentUser = None,
+    db: UserDB = None,
 ):
     """Retrieves the lifecycle of a specific file based on commits and file_diffs."""
     try:
@@ -78,3 +83,4 @@ async def get_file_evolution(
     except Exception as e:
         logger.error(f"Failed to fetch file evolution: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch file evolution")
+

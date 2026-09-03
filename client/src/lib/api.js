@@ -74,5 +74,5 @@ api.delete = (path) => api(path, { method: "DELETE" });
 api.getAISummary = (repoId, payload = {}) => api.post(`/api/ai/summary/${repoId}`, payload);
 api.getAIShifts = (repoId, payload = {}) => api.post(`/api/ai/shifts/${repoId}`, payload);
 api.getAIStory = (repoId, payload = {}) => api.post(`/api/ai/story/${repoId}`, payload);
-api.askAIChat = (repoId, history) => api.post(`/api/ai/chat/${repoId}`, { history });
+api.askAIChat = (repoId, history, page_context = null) => api.post(`/api/ai/chat/${repoId}`, { history, page_context });
 

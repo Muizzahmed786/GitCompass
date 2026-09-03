@@ -12,7 +12,6 @@ Orchestrates the background repository mining workflow:
 from datetime import datetime, timezone
 import logging
 import tempfile
-import tempfile
 import traceback
 from typing import List, Any, Optional
 
@@ -151,6 +150,38 @@ def mine_repository_task(repo_id: str, github_url: str, user_id: str, branch: Op
         # Step 7: Teardown temp directory
         safe_cleanup_dir(temp_dir)
 
+
+def delete_repo_background(repo_id: str, db: Any):
+    """Background task to delete repository tables step-by-step and report progress."""
+    try:
+        large_tables = [
+            "file_diffs",
+            "commits",
+            "repository_events",
+            "repository_source_files",
+            "repository_dependencies"
+        ]
+        total_steps = len(large_tables) + 1
+        
+        for i, table_name in enumerate(large_tables):
+            try:
+                db.table(table_name).delete().eq("repo_id", repo_id).execute()
+            except Exception as e:
+                logger.warning("Failed to manually cascade delete %s for %s: %s", table_name, repo_id, e)
+                
+            progress = int(((i + 1) / total_steps) * 100)
+            try:
+                db.table("repositories").update({"mining_progress": progress}).eq("id", repo_id).execute()
+            except Exception:
+                pass
+
+        db.table("repositories").delete().eq("id", repo_id).execute()
+    except Exception as exc:
+        logger.error("Background delete failed for repository %s: %s", repo_id, exc)
+        try:
+            db.table("repositories").update({"status": "failed", "mining_progress": 0}).eq("id", repo_id).execute()
+        except Exception:
+            pass
 
 def sync_repository_task(repo_id: str, github_url: str, user_id: str, branch: Optional[str] = None):
     """Background task handler for incremental delta repository sync."""

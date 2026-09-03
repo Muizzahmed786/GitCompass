@@ -6,12 +6,13 @@ export default function AIChatDrawer({ isOpen, onClose, repoId }) {
   const [history, setHistory] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I am the GitCompass AI. I can answer questions about this repository based on its codebase, architecture, and git history.'
+      content: 'Hello! I am the GitCompass AI. I can answer questions about this repository based on its codebase, architecture, and git history.\n\n**Note:** I am still in development, so my results may not be perfectly consistent yet, and many more features are yet to come!'
     }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [pageContext, setPageContext] = useState(null);
   
   const messagesEndRef = useRef(null);
 
@@ -22,12 +23,19 @@ export default function AIChatDrawer({ isOpen, onClose, repoId }) {
     }
   }, [history, isLoading]);
 
+  // Listen for global page context updates
+  useEffect(() => {
+    const handleSetContext = (e) => setPageContext(e.detail);
+    window.addEventListener('gitcompass:set_page_context', handleSetContext);
+    return () => window.removeEventListener('gitcompass:set_page_context', handleSetContext);
+  }, []);
+
   // Reset chat if repo changes
   useEffect(() => {
     setHistory([
       {
         role: 'assistant',
-        content: 'Hello! I am the GitCompass AI. I can answer questions about this repository based on its codebase, architecture, and git history.'
+        content: 'Hello! I am the GitCompass AI. I can answer questions about this repository based on its codebase, architecture, and git history.\n\n**Note:** I am still in development, so my results may not be perfectly consistent yet, and many more features are yet to come!'
       }
     ]);
     setError(null);
@@ -46,10 +54,10 @@ export default function AIChatDrawer({ isOpen, onClose, repoId }) {
     setError(null);
 
     try {
-      const payload = updatedHistory.filter(msg => msg.role === 'user' || msg.role === 'assistant');
-      const response = await api.askAIChat(repoId, payload);
+      const payload = updatedHistory.filter(msg => msg.role === 'user' || msg.role === 'assistant').map(m => ({ role: m.role, content: m.content }));
+      const response = await api.askAIChat(repoId, payload, pageContext);
       
-      setHistory(prev => [...prev, { role: 'assistant', content: response.answer }]);
+      setHistory(prev => [...prev, { role: 'assistant', content: response.answer, citations: response.citations }]);
     } catch (err) {
       console.error("AI Chat Error:", err);
       setError("Something went wrong while analyzing the repository. Try again.");
@@ -110,6 +118,16 @@ export default function AIChatDrawer({ isOpen, onClose, repoId }) {
                 ) : (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2 border-t-2 border-[var(--color-border)] pt-4">
+                        <span className="text-xs font-black uppercase text-[var(--color-text-tertiary)] w-full block mb-1 tracking-widest">Evidence</span>
+                        {msg.citations.map((cit, cIdx) => (
+                          <div key={cIdx} className="px-2 py-1 bg-[var(--color-surface-raised)] border-2 border-[var(--color-border)] shadow-[2px_2px_0px_var(--color-border)] text-xs font-mono flex items-center gap-2 text-[var(--color-text-primary)]">
+                            {cit.type === 'file' ? '📄' : '📌'} {cit.path}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -160,9 +178,14 @@ export default function AIChatDrawer({ isOpen, onClose, repoId }) {
             </button>
           </form>
           <div className="mt-2 text-center">
-             <span className="text-[10px] uppercase font-black tracking-widest text-[var(--color-text-tertiary)]">
+             <span className="text-[10px] uppercase font-black tracking-widest text-[var(--color-text-tertiary)] block">
                AI uses repository evidence to answer questions
              </span>
+             {pageContext && pageContext.page && (
+               <span className="text-[10px] uppercase font-black tracking-widest text-[var(--color-primary)] mt-1 block">
+                 Context: {pageContext.page} {pageContext.selected_file && `- ${pageContext.selected_file}`}
+               </span>
+             )}
           </div>
         </div>
       </aside>

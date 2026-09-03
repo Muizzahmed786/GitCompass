@@ -180,9 +180,11 @@ export default function RepositoryAnalytics() {
         {/* Top Hotspots */}
         <div className="card p-8 flex flex-col">
           <h2 className="text-sm font-black uppercase tracking-widest text-text-tertiary mb-6">Top Hotspots</h2>
-          <div className="flex-1 space-y-4 mb-8">
+          <div className="flex-1 flex flex-col space-y-4 mb-8">
             {topActive.length === 0 ? (
-              <p className="text-sm text-text-tertiary italic">No hotspot data available.</p>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-sm text-text-tertiary italic">No hotspot data available.</p>
+              </div>
             ) : (
               topActive.map((file, idx) => (
                 <div key={idx} className="flex items-center justify-between border-b-2 border-border/10 pb-3">
@@ -205,9 +207,11 @@ export default function RepositoryAnalytics() {
               Bus Factor: {busFactor?.repo_bus_factor || "?"}
             </span>
           </h2>
-          <div className="flex-1 space-y-4 mb-8">
+          <div className="flex-1 flex flex-col space-y-4 mb-8">
             {topContributors.length === 0 ? (
-              <p className="text-sm text-text-tertiary italic">No contributor data available.</p>
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-sm text-text-tertiary italic">No contributor data available.</p>
+              </div>
             ) : (
               topContributors.map(([author, count], idx) => {
                 const total = Object.values(busFactor.top_contributors).reduce((s, v) => s + v, 0) || 1;

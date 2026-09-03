@@ -135,13 +135,14 @@ The fundamental principle guiding this roadmap is **separation of extraction and
 - **Critical Constraint:** Explicitly distinguish factual evidence from AI inferences.
 
 ### Stage 8 — Repository Q&A
-**Status:** 🔴 High Priority (Next Stage)
+**Status:** ✅ Complete
 **Goal:** Context-aware conversational interface.
 - Retrieve specific slices of the Knowledge Model (e.g., dependency graph + commit history for a specific file).
 - Use the LLM to synthesize highly accurate, context-rich answers to user queries (e.g., "Why was Redis introduced here?").
+- **Implementation:** `server/app/routers/ai.py`, `server/app/services/chat_retrieval.py`, `client/src/components/AIChatDrawer.jsx`
 
 ### Stage 9 — Architecture Visualization
-**Status:** 🟡 Lower Priority (Refinement)
+**Status:** 🔴 High Priority (Next Stage)
 **Goal:** Frontend interactive visualization of the Knowledge Model.
 - Node/Edge graphing of services, modules, and dependencies.
 - Interactive drill-downs: clicking a service reveals its file count, commit velocity, and history.

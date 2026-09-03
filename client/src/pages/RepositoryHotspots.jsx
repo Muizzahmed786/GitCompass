@@ -90,6 +90,13 @@ export default function RepositoryHotspots() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Set page context for AI
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('gitcompass:set_page_context', {
+      detail: { page: "Hotspots", view: "repository-hotspots" }
+    }));
+  }, []);
+
   const handleSort = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -345,7 +352,15 @@ export default function RepositoryHotspots() {
                 </tr>
               ) : (
                 sortedHotspots.map((hotspot) => (
-                  <tr key={hotspot.file_path} className="hover:bg-surface-hover/30 transition-colors">
+                  <tr 
+                    key={hotspot.file_path} 
+                    className="hover:bg-surface-hover/30 transition-colors cursor-pointer"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('gitcompass:set_page_context', {
+                        detail: { page: "Hotspots", view: "repository-hotspots", selected_file: hotspot.file_path }
+                      }));
+                    }}
+                  >
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-text-primary break-all max-w-[280px]">
                         {hotspot.file_path}

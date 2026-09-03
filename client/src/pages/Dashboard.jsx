@@ -65,7 +65,7 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     const hasActiveMining = repositories.some((r) =>
-      ["pending", "cloning", "mining"].includes(r.status)
+      ["pending", "cloning", "mining", "deleting"].includes(r.status)
     );
 
     if (hasActiveMining) {
@@ -153,7 +153,7 @@ export default function Dashboard({ user }) {
 
     try {
       await api.delete(`/api/repositories/${repoId}`);
-      setRepositories((prev) => prev.filter((r) => r.id !== repoId));
+      await loadRepositories(true);
     } catch (err) {
       alert(`Failed to delete repository: ${err.message}`);
     }
@@ -169,6 +169,14 @@ export default function Dashboard({ user }) {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {/* Beta Notice Banner */}
+      <div className="bg-[var(--color-special)] text-white p-4 border-4 border-[var(--color-border)] shadow-[4px_4px_0px_#121212] flex flex-col sm:flex-row items-center justify-center gap-3">
+        <span className="bg-[#121212] text-white px-2 py-1 text-xs font-black uppercase tracking-widest shrink-0">BETA</span>
+        <p className="text-sm font-bold uppercase tracking-wider text-center">
+          GitCompass is in active development. Results may not be perfectly consistent yet, and many more features are on the way!
+        </p>
+      </div>
+
       {/* ── Header ─────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 border-b-4 border-[var(--color-border)] pb-6">
         <div>
@@ -339,14 +347,14 @@ export default function Dashboard({ user }) {
                   <span className="truncate">{repo.github_url}</span>
                 </a>
 
-                {repo.status === 'mining' && repo.mining_progress !== undefined && (
+                {(repo.status === 'mining' || repo.status === 'deleting') && repo.mining_progress !== undefined && (
                   <div className="w-full max-w-md">
                     <div className="flex justify-between text-xs font-black uppercase mb-1">
-                      <span>Mining Progress</span>
+                      <span>{repo.status === 'deleting' ? 'Deletion Progress' : 'Mining Progress'}</span>
                       <span>{repo.mining_progress}%</span>
                     </div>
                     <div className="h-3 border-2 border-[var(--color-border)] bg-[var(--color-surface)] w-full">
-                      <div className="h-full bg-[var(--color-primary)] transition-all duration-300" style={{ width: `${repo.mining_progress}%` }}></div>
+                      <div className={`h-full transition-all duration-300 ${repo.status === 'deleting' ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-primary)]'}`} style={{ width: `${repo.mining_progress}%` }}></div>
                     </div>
                   </div>
                 )}
@@ -381,12 +389,12 @@ export default function Dashboard({ user }) {
                     </>
                   )}
                   
-                  <button onClick={() => handleRetryRepository(repo)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-primary)] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)] hover:text-[#121212]" title="Retry / Re-mine">
+                  <button onClick={() => handleRetryRepository(repo)} disabled={repo.status === 'deleting'} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-primary)] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)] hover:text-[#121212] disabled:opacity-50 disabled:cursor-not-allowed" title="Retry / Re-mine">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="square" strokeLinejoin="miter" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                   </button>
-                  <button onClick={() => handleDeleteRepository(repo.id, repo.name)} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-warning)] hover:text-[#121212] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)]" title="Delete">
+                  <button onClick={() => handleDeleteRepository(repo.id, repo.name)} disabled={repo.status === 'deleting'} className="p-2 border-2 border-[var(--color-border)] bg-[var(--color-surface-raised)] hover:bg-[var(--color-warning)] hover:text-[#121212] shadow-hard-sm hover:shadow-hard transition-all text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed" title="Delete">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="square" strokeLinejoin="miter" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
