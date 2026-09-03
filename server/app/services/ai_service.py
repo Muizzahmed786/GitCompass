@@ -5,6 +5,7 @@ Implements a multi-provider fallback architecture.
 
 import logging
 import json
+import re
 from typing import Dict, List, Optional, Any
 
 from app.services.ai_providers import generate_ai_response, AllProvidersFailedError
