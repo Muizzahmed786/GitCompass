@@ -39,3 +39,23 @@ class SummaryAnalyticsResponse(BaseModel):
     commit_types_distribution: Dict[str, int]
     total_coupled_pairs: int
     orphan_files_count: int
+
+
+class GraphNode(BaseModel):
+    id: str
+    label: str
+    type: str
+    category: Optional[str] = None
+
+
+class GraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    type: str
+
+
+class KnowledgeGraphResponse(BaseModel):
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+    is_truncated: bool = False

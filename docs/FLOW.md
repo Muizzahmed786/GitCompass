@@ -41,5 +41,19 @@
    - Uses the provider chain in `services/ai_providers.py`.
 5. **Response**: Citations are validated against supplied paths and the answer is returned.
 
+## Architecture Visualization Flow (Phase 9)
+1. **Client** requests `/api/analytics/{repo_id}/knowledge-graph` via `ArchitectureGraph.jsx`.
+2. **`routers/analytics.py`**:
+   - Delegates request to `services/knowledge_graph.py`.
+3. **`services/knowledge_graph.py`**:
+   - Queries `repository_dependencies` and `repository_source_files`.
+   - Aggregates file-level AST data into module-level structures (grouped by directory).
+   - Generates UI-agnostic `GraphNode` and `GraphEdge` domain models.
+4. **Client (`ArchitectureGraph.jsx`)**:
+   - Transforms backend UI-agnostic domain models to React Flow nodes/edges.
+   - Applies deterministic hierarchical layout via `dagre`.
+5. **Drill-down (`NodeInspector.jsx`)**:
+   - Selecting a node retrieves additional telemetry dynamically (e.g. via `/hotspots`) without over-fetching on initial graph load.
+
 ## Current Execution Path Under Modification
-None currently. Refactoring complete.
+Phase 9 implementation complete. Code paths updated: `services/knowledge_graph.py`, `routers/analytics.py`, `client/src/components/ArchitectureGraph.jsx`, `client/src/components/NodeInspector.jsx`.

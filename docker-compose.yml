@@ -1,3 +1,10 @@
+# PRODUCTION Docker Compose
+# DO NOT use for local development — the server image will be stale.
+# For development, run:
+#   - Infrastructure: docker compose -f docker-compose.dev.yml up -d
+#   - Server: cd server && uvicorn app.main:app --reload --port 8000
+#   - Client: cd client && npm run dev
+#
 services:
   server:
     build: ./server
