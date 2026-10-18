@@ -1,0 +1,15 @@
+# Development Docker Compose
+# Runs ONLY infrastructure services (Redis).
+# Supabase is managed by the supabase CLI separately.
+# The FastAPI server and React client run locally — NOT in Docker.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: gitcompass-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped

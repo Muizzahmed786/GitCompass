@@ -33,9 +33,9 @@ async def get_repository_hotspots(
     repo_id: str,
     user: CurrentUser,
     db: UserDB,
-    start_date: Optional[str] = Query(None, description="ISO start date for Time Machine filter"),
-    end_date: Optional[str] = Query(None, description="ISO end date for Time Machine filter"),
-    commit_type: Optional[str] = Query(None, description="Conventional commit type filter (e.g. feat, fix)"),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    commit_type: Optional[str] = None,
 ):
     """Get hotspot analytics for a repository.
 
@@ -99,6 +99,22 @@ async def get_bus_factor_analytics(repo_id: str, user: CurrentUser, db: UserDB):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error computing bus factor: {exc}",
+        )
+
+
+@router.get("/{repo_id}/knowledge-graph")
+async def get_knowledge_graph(repo_id: str, user: CurrentUser, db: UserDB):
+    """Retrieve the UI-agnostic repository knowledge graph."""
+    try:
+        from app.services.knowledge_graph import build_knowledge_graph
+        results = await build_knowledge_graph(db, repo_id)
+        return results
+
+    except Exception as exc:
+        logger.error("Failed to compute knowledge graph for repo %s: %s", repo_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error computing knowledge graph: {exc}",
         )
 
 
